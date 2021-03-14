@@ -1,0 +1,27 @@
+{
+  "name": "md_touch",
+  "version": "0.1.0",
+  "description": "Personal library, that contains utilities of general purpose",
+  "keywords": "Touch",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/MDFreak/MD_Libs"
+  },
+  "authors":
+  [
+    {
+      "name": "Martin Dorfner",
+      "email": "inbox@martin-dorfner.at",
+      "url": "https://www.martin-dorfner.at",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://www.helloworld.org/",
+  "dependencies": {
+    "ownername/print": "~0.1.0"
+  },
+  "frameworks": "*",
+  "platforms": "*"
+}
