@@ -8,7 +8,6 @@
   #include <md_defines.h>
 
 // --- globals
-  mdXPT2046*   pts_       = NULL;
   md_touch*    pmdt_      = NULL;
   mdGrafx*     pgfx_      = NULL;
   md_menu*     menu_      = NULL;
@@ -132,28 +131,7 @@ uint8_t oldPage(uint32_t val)
     return true;
   }
 
-  /*void calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj)
-      {
-        SOUT(" calibratePoint "); SOUTHEXLN((uint32_t) pgfx_);
-        // Draw cross
-          pgfx_->fillBuffer(MD4_BLACK);
-          pgfx_->commit();
-          pgfx_->setColor(MD4_YELLOW);
-          pgfx_->drawLine(x - 8, y, x + 8, y);
-          pgfx_->drawLine(x, y - 8, x, y + 8);
-          pgfx_->commit();
-
-        SOUT("wait for touching ... ");
-        while (!pts_->isTouching())
-          { usleep(10000); }
-        SOUT("touching ... ");
-        pts_->getRaw(vi, vj);
-        pgfx_->drawRect(x - 8, y - 8, 17, 17);
-        while (pts_->isTouching())
-          { usleep(10000); }
-        SOUTLN(" released");
-      }
-
+  /*
     void calibrate()
       {
         uint16_t x1, y1, x2, y2;
@@ -189,29 +167,29 @@ uint8_t oldPage(uint32_t val)
                                    calPars.vi1, calPars.vj1, calPars.dvi, calPars.dvj);
         pmdt_->saveCalibration(buf, sizeof(buf));
       }
-      */
+  */
 // ----------------------------------------------------------------
 // --- class md_touch
-	md_touch::md_touch(uint8_t cspin, uint8_t tirq, uint8_t spi_bus)
+	md_touch::md_touch(uint8_t cspin, uint8_t tirq) //, uint8_t spi_bus)
     {
       //pts_ = new XPT2046_Touchscreen(cspin, tirq);
       pmdt_  = this;
       tcs_   = cspin;
       tirq_  = tirq;
       //_pSPI  = p;
-      pts_  = new mdXPT2046(tcs_, tirq_, spi_bus);
+      //pts_  = new mdXPT2046(tcs_, tirq_, spi_bus);
     }
 
   md_touch::~md_touch()
     {
-      pts_ = NULL;
+      //pts_ = NULL;
     }
 
-  void md_touch::begin(mdGrafx* pgfx, uint8_t rotation)
+  void md_touch::init(Adafruit_ILI9341* ptft, uint8_t rotation)
     {
       pgfx_ = pgfx;
       _rotation = rotation;
-      pts_->begin(240, 320);
+      //pts_->begin(240, 320);
       //if(1)
       if (!loadCalibration())
         {
@@ -232,92 +210,92 @@ uint8_t oldPage(uint32_t val)
   bool md_touch::loadCalibration()
     {
       // always use this to "mount" the filesystem
-      SOUTLN("loadCalibration SPIFFS ...");
-      bool result = SPIFFS.begin();
-      SOUTLN("SPIFFS is init");
-
-      SOUT("SPIFFS opened: ");
-      SOUTLN(result ? "OK" : "Failed");
-      // this opens the file in read-mode
-      if (!SPIFFS.exists("/calibration.txt"))
-        {
-          SOUTLN("calibration.txt not present");
-          return false;
-        }
-      File f = SPIFFS.open("/calibration.txt", "r");
-      SOUT("filename "); SOUTLN(f.name());
-      if (f)
-        {
-          //Lets read line by line from the file
-          char tmp[9];
-          tmp[8] = 0;
-          calParams_t cal;
-
-          SOUTLN("load cal params ");
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("dx  '"); SOUT(tmp); SOUT("' ");
-          cal.dx = atoi(tmp);
-          SOUTLN(cal.dx);
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("dy  '"); SOUT(tmp); SOUT("' ");
-          cal.dy = atoi(tmp);
-          SOUTLN(cal.dy);
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("vi1 '"); SOUT(tmp); SOUT("' ");
-          cal.vi1 = atoi(tmp);
-          SOUTLN(cal.vi1);
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("vj1 '"); SOUT(tmp); SOUT("' ");
-          cal.vj1 = atoi(tmp);
-          SOUTLN(cal.vj1);
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("dvi  '"); SOUT(tmp); SOUT("' ");
-          cal.dvi = atoi(tmp);
-          SOUTLN(cal.dvi);
-          f.readBytesUntil('\n', tmp, 8);
-          SOUT("dvj  '"); SOUT(tmp); SOUT("' ");
-          cal.dvj = atoi(tmp);
-          SOUTLN(cal.dvj);
-          //String dxStr  = tmp;
-          /*
-            String dxStr  = f.readString();
-            String dyStr  = f.readString(); //  readStringUntil(';');
-            String dviStr = f.readString(); //  readStringUntil(';');
-            String dvjStr = f.readString(); //  readStringUntil(';');
-            String vi1Str = f.readString(); //  readStringUntil(';');
-            String vj1Str = f.readString(); //  readStringUntil(';');
-              SOUT("cal params '"); SOUT(dxStr);
-              SOUT("' '"); SOUT(dyStr);
-              SOUT("' '"); SOUT(dviStr);
-              SOUT("' '"); SOUT(dvjStr);
-              SOUT("' '"); SOUT(vi1Str);
-              SOUT("' '"); SOUT(vj1Str);
-            int32_t cal_dx  = dxStr.toInt();
-            int32_t cal_dy  = dyStr.toInt();
-            int32_t cal_dvi = dviStr.toInt();
-            int32_t cal_dvj = dvjStr.toInt();
-            int32_t cal_vi1 = vi1Str.toInt();
-            int32_t cal_vj1 = vj1Str.toInt();
-              SOUT("' int "); SOUT(cal_dx);
-              SOUT(" "); SOUT(cal_dy);
-              SOUT(" "); SOUT(cal_dvi);
-              SOUT(" "); SOUT(cal_dvj);
-              SOUT(" "); SOUT(cal_vi1);
-              SOUT(" "); SOUTLN(cal_vj1);
-            if (!cal_dx)  return false;
-            if (!cal_dy)  return false;
-            if (!cal_dvi) return false;
-            if (!cal_dvj) return false;
-            if (!cal_vi1) return false;
-            if (!cal_vj1) return false;
-            */
-          f.close();
-          pts_->setCalibration(&cal);
-        }
+      //      SOUTLN("loadCalibration SPIFFS ...");
+        //      bool result = SPIFFS.begin();
+        //      SOUTLN("SPIFFS is init");
+        //
+        //      SOUT("SPIFFS opened: ");
+        //      SOUTLN(result ? "OK" : "Failed");
+        //      // this opens the file in read-mode
+        //      if (!SPIFFS.exists("/calibration.txt"))
+        //        {
+        //          SOUTLN("calibration.txt not present");
+        //          return false;
+        //        }
+        //      File f = SPIFFS.open("/calibration.txt", "r");
+        //      SOUT("filename "); SOUTLN(f.name());
+        //      if (f)
+        //        {
+        //          //Lets read line by line from the file
+        //          char tmp[9];
+        //          tmp[8] = 0;
+        //          calParams_t cal;
+        //
+        //          SOUTLN("load cal params ");
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("dx  '"); SOUT(tmp); SOUT("' ");
+        //          cal.dx = atoi(tmp);
+        //          SOUTLN(cal.dx);
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("dy  '"); SOUT(tmp); SOUT("' ");
+        //          cal.dy = atoi(tmp);
+        //          SOUTLN(cal.dy);
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("vi1 '"); SOUT(tmp); SOUT("' ");
+        //          cal.vi1 = atoi(tmp);
+        //          SOUTLN(cal.vi1);
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("vj1 '"); SOUT(tmp); SOUT("' ");
+        //          cal.vj1 = atoi(tmp);
+        //          SOUTLN(cal.vj1);
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("dvi  '"); SOUT(tmp); SOUT("' ");
+        //          cal.dvi = atoi(tmp);
+        //          SOUTLN(cal.dvi);
+        //          f.readBytesUntil('\n', tmp, 8);
+        //          SOUT("dvj  '"); SOUT(tmp); SOUT("' ");
+        //          cal.dvj = atoi(tmp);
+        //          SOUTLN(cal.dvj);
+        //          //String dxStr  = tmp;
+        //          /*
+        //            String dxStr  = f.readString();
+        //            String dyStr  = f.readString(); //  readStringUntil(';');
+        //            String dviStr = f.readString(); //  readStringUntil(';');
+        //            String dvjStr = f.readString(); //  readStringUntil(';');
+        //            String vi1Str = f.readString(); //  readStringUntil(';');
+        //            String vj1Str = f.readString(); //  readStringUntil(';');
+        //              SOUT("cal params '"); SOUT(dxStr);
+        //              SOUT("' '"); SOUT(dyStr);
+        //              SOUT("' '"); SOUT(dviStr);
+        //              SOUT("' '"); SOUT(dvjStr);
+        //              SOUT("' '"); SOUT(vi1Str);
+        //              SOUT("' '"); SOUT(vj1Str);
+        //            int32_t cal_dx  = dxStr.toInt();
+        //            int32_t cal_dy  = dyStr.toInt();
+        //            int32_t cal_dvi = dviStr.toInt();
+        //            int32_t cal_dvj = dvjStr.toInt();
+        //            int32_t cal_vi1 = vi1Str.toInt();
+        //            int32_t cal_vj1 = vj1Str.toInt();
+        //              SOUT("' int "); SOUT(cal_dx);
+        //              SOUT(" "); SOUT(cal_dy);
+        //              SOUT(" "); SOUT(cal_dvi);
+        //              SOUT(" "); SOUT(cal_dvj);
+        //              SOUT(" "); SOUT(cal_vi1);
+        //              SOUT(" "); SOUTLN(cal_vj1);
+        //            if (!cal_dx)  return false;
+        //            if (!cal_dy)  return false;
+        //            if (!cal_dvi) return false;
+        //            if (!cal_dvj) return false;
+        //            if (!cal_vi1) return false;
+        //            if (!cal_vj1) return false;
+        //            */
+        //          f.close();
+        //          pts_->setCalibration(&cal);
+        //        }
       return true;
     }
 
-void md_touch::calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj)
+/*void md_touch::calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj)
   {
     SOUT(" calibratePoint "); SOUTHEXLN((uint32_t) pgfx_);
     // Draw cross
@@ -338,149 +316,148 @@ void md_touch::calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj
       { usleep(1000); }
     SOUTLN(" touch released");
   }
-
+*/
 void md_touch::calibrate()
   {
-    uint16_t x1, y1, x2, y2, x3, y3, x4, y4;
-    uint16_t vi1, vj1, vi2, vj2, vi3, vj3, vi4, vj4;
-    //uint8_t  isok = false;
-    calParams_t cal;
-    char buf[80];
-
-    SOUTLN("Start calibration ...");
-    pts_->getCalibrationPoints(x1, y1, x2, y2);
-    SOUT("cal point "); SOUT(x1); SOUT(" "); SOUTLN(y1);
-    calibratePoint(x1, y1, vi1, vj1);
-    SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(vi1); SOUT(" "); SOUTLN(vj1);
-    //calibratePoint(x1, y1, cal.vi1, cal.vj1);
-    //SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(cal.vi1); SOUT(" "); SOUTLN(cal.vj1);
-    sleep(1);
-    //usleep(50000);
-    //calibratePoint(x2, y2, cal.dvi, cal.dvj);
-    //SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(cal.dvi); SOUT(" "); SOUTLN(cal.dvj);
-    SOUT("cal point "); SOUT(x2); SOUT(" "); SOUTLN(y2);
-    calibratePoint(x2, y2, vi2, vj2);
-    SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(vi2); SOUT(" "); SOUTLN(vj2);
-    sleep(1);
-    SOUT("cal point "); SOUT(x3); SOUT(" "); SOUTLN(y3);
-    x3 = 20;  y3 = 300;
-    x4 = 220; y4 = 20;
-    calibratePoint(x3, y3, vi3, vj3);
-    SOUT("cal p(3) "); SOUT(x3); SOUT(" "); SOUT(y3); SOUT(" "); SOUT(vi3); SOUT(" "); SOUTLN(vj3);
-    sleep(1);
-    SOUT("cal point "); SOUT(x4); SOUT(" "); SOUTLN(y4);
-    calibratePoint(x4, y4, vi4, vj4);
-    SOUT("cal p(4) "); SOUT(x4); SOUT(" "); SOUT(y4); SOUT(" "); SOUT(vi4); SOUT(" "); SOUTLN(vj4);
-
-
-    cal.dx = x2 - x1;
-    cal.dy = y2 - y1;
-    cal.vi1 = vi1;
-    cal.vj1 = vj1;
-    cal.dvi -= cal.vi1;
-    cal.dvj -= cal.vj1;
-
-
-    pts_->setCalibration(&cal);
-    // show result on touch
-      snprintf(buf, sizeof(buf), "%u %u %u %u %u %u",      cal.dx,  cal.dy,
-                                 cal.vi1, cal.vj1, cal.dvi, cal.dvj);
-      pgfx_->fillBuffer(MD4_BLACK);
-      pgfx_->setFont(ArialRoundedMTBold_14);
-      pgfx_->setColor(MD4_YELLOW);
-      pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
-      pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
-      pgfx_->commit();
-
-    snprintf(buf, sizeof(buf), "%u\n%u\n%u\n%u\n%u\n%u\n",      cal.dx,  cal.dy,
-                               cal.vi1, cal.vj1, cal.dvi, cal.dvj);
-    SOUT("cal "); SOUT(buf); SOUT(" "); SOUTLN(sizeof(buf));
-    saveCalibration(buf, sizeof(buf));
+    //uint16_t x1, y1, x2, y2, x3, y3, x4, y4;
+    //uint16_t vi1, vj1, vi2, vj2, vi3, vj3, vi4, vj4;
+    ////uint8_t  isok = false;
+    //calParams_t cal;
+    //char buf[80];
+    //
+    //SOUTLN("Start calibration ...");
+    //pts_->getCalibrationPoints(x1, y1, x2, y2);
+    //SOUT("cal point "); SOUT(x1); SOUT(" "); SOUTLN(y1);
+    //calibratePoint(x1, y1, vi1, vj1);
+    //SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(vi1); SOUT(" "); SOUTLN(vj1);
+    ////calibratePoint(x1, y1, cal.vi1, cal.vj1);
+    ////SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(cal.vi1); SOUT(" "); SOUTLN(cal.vj1);
+    //sleep(1);
+    ////usleep(50000);
+    ////calibratePoint(x2, y2, cal.dvi, cal.dvj);
+    ////SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(cal.dvi); SOUT(" "); SOUTLN(cal.dvj);
+    //SOUT("cal point "); SOUT(x2); SOUT(" "); SOUTLN(y2);
+    //calibratePoint(x2, y2, vi2, vj2);
+    //SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(vi2); SOUT(" "); SOUTLN(vj2);
+    //sleep(1);
+    //SOUT("cal point "); SOUT(x3); SOUT(" "); SOUTLN(y3);
+    //x3 = 20;  y3 = 300;
+    //x4 = 220; y4 = 20;
+    //calibratePoint(x3, y3, vi3, vj3);
+    //SOUT("cal p(3) "); SOUT(x3); SOUT(" "); SOUT(y3); SOUT(" "); SOUT(vi3); SOUT(" "); SOUTLN(vj3);
+    //sleep(1);
+    //SOUT("cal point "); SOUT(x4); SOUT(" "); SOUTLN(y4);
+    //calibratePoint(x4, y4, vi4, vj4);
+    //SOUT("cal p(4) "); SOUT(x4); SOUT(" "); SOUT(y4); SOUT(" "); SOUT(vi4); SOUT(" "); SOUTLN(vj4);
+    //
+    //
+    //cal.dx = x2 - x1;
+    //cal.dy = y2 - y1;
+    //cal.vi1 = vi1;
+    //cal.vj1 = vj1;
+    //cal.dvi -= cal.vi1;
+    //cal.dvj -= cal.vj1;
+    //
+    //
+    //pts_->setCalibration(&cal);
+    //// show result on touch
+    //  snprintf(buf, sizeof(buf), "%u %u %u %u %u %u",      cal.dx,  cal.dy,
+    //                             cal.vi1, cal.vj1, cal.dvi, cal.dvj);
+    //  pgfx_->fillBuffer(MD4_BLACK);
+    //  pgfx_->setFont(ArialRoundedMTBold_14);
+    //  pgfx_->setColor(MD4_YELLOW);
+    //  pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
+    //  pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
+    //  pgfx_->commit();
+    //
+    //snprintf(buf, sizeof(buf), "%u\n%u\n%u\n%u\n%u\n%u\n",      cal.dx,  cal.dy,
+    //                           cal.vi1, cal.vj1, cal.dvi, cal.dvj);
+    //SOUT("cal "); SOUT(buf); SOUT(" "); SOUTLN(sizeof(buf));
+    //saveCalibration(buf, sizeof(buf));
   }
 
   bool md_touch::saveCalibration(char* text, size_t len)
     {
       bool result = SPIFFS.begin();
-      if (result)
-        {
-          File f = SPIFFS.open("/calibration.txt", "w");
-          if (!f)
-            {
-              SOUTLN("file creation failed");
-              result = false;
-            }
-          else
-            {
-              f.close();
-              SPIFFS.remove("/calibration.txt");
-              f = SPIFFS.open("/calibration.txt", "w");
-              f.write((uint8_t*) text, len);
-              SOUT("file '"); SOUT(text); SOUT("' ("); SOUT(len);SOUTLN(") saved");
-              f.flush();
-              f.close();
-            }
-        }
+    //  if (result)
+    //    {
+    //      File f = SPIFFS.open("/calibration.txt", "w");
+    //      if (!f)
+    //        {
+    //          SOUTLN("file creation failed");
+    //          result = false;
+    //        }
+    //      else
+    //        {
+    //          f.close();
+    //          SPIFFS.remove("/calibration.txt");
+    //          f = SPIFFS.open("/calibration.txt", "w");
+    //          f.write((uint8_t*) text, len);
+    //          SOUT("file '"); SOUT(text); SOUT("' ("); SOUT(len);SOUTLN(") saved");
+    //          f.flush();
+    //          f.close();
+    //        }
+    //    }
       return result;
     }
 
-  #ifdef ALT
-    bool md_touch::loadCalibration()
-      {
-        // always use this to "mount" the filesystem
-        bool result = SPIFFS.begin();
-        Serial.print("SPIFFS opened: ");
-        Serial.println(result ? "OK" : "Failed");
+  bool md_touch::loadCalibration()
+    {
+      // always use this to "mount" the filesystem
+      bool result = SPIFFS.begin();
+      Serial.print("SPIFFS opened: ");
+      Serial.println(result ? "OK" : "Failed");
 
-        // this opens the file in read-mode
-        File f = SPIFFS.open("/calibration.txt", "r");
+      // this opens the file in read-mode
+      File f = SPIFFS.open("/calibration.txt", "r");
 
-        if (!f)
-          { return false; }
-          else
-          {
-            //Lets read line by line from the file
-            String dxStr = f.readStringUntil('\n');
-            String dyStr = f.readStringUntil('\n');
-            String axStr = f.readStringUntil('\n');
-            String ayStr = f.readStringUntil('\n');
+      if (!f)
+        { return false; }
+        else
+        {
+          //Lets read line by line from the file
+          String dxStr = f.readStringUntil('\n');
+          String dyStr = f.readStringUntil('\n');
+          String axStr = f.readStringUntil('\n');
+          String ayStr = f.readStringUntil('\n');
 
-            dx = dxStr.toFloat();
-            dy = dyStr.toFloat();
-            ax = axStr.toInt();
-            ay = ayStr.toInt();
-          }
-        f.close();
-        return true;
-      }
+          dx = dxStr.toFloat();
+          dy = dyStr.toFloat();
+          ax = axStr.toInt();
+          ay = ayStr.toInt();
+        }
+      f.close();
+      return true;
+    }
 
-    bool md_touch::saveCalibration()
-      {
-        bool result = SPIFFS.begin();
+  bool md_touch::saveCalibration()
+    {
+      bool result = SPIFFS.begin();
 
-        // open the file in write mode
-        File f = SPIFFS.open("/calibration.txt", "w");
-        if (!f)
-          {
-            Serial.println("file creation failed");
-            return false;
-          }
-        // now write two lines in key/value style with  end-of-line characters
-        f.println(dx);
-        f.println(dy);
-        f.println(ax);
-        f.println(ay);
+      // open the file in write mode
+      File f = SPIFFS.open("/calibration.txt", "w");
+      if (!f)
+        {
+          Serial.println("file creation failed");
+          return false;
+        }
+      // now write two lines in key/value style with  end-of-line characters
+      f.println(dx);
+      f.println(dy);
+      f.println(ax);
+      f.println(ay);
 
-        f.close();
+      f.close();
 
-        return true;
-      }
+      return true;
+    }
 
-    void md_touch::doCalibration(CalibrationCallback *calCallback)
-      {
-        state = 0;
-        this->calibrationCallback = calibrationCallback;
-      }
-
+  void md_touch::doCalibration()
+    {
+      state = 0;
+      this->calibrationCallback = calibrationCallback;
+    }
+  #ifdef XXXX
     bool md_touch::isTouched()
       {
         return pts_->touched();
@@ -550,7 +527,7 @@ void md_touch::calibrate()
   md_menu::md_menu()  {}
   md_menu::~md_menu() {}
 
-  void md_menu::begin(mdGrafx* pgfx,
+  void md_menu::begin(Adafruit_ILI9341* ptft,
                       const int16_t x, const int16_t y, const int16_t w,
                       const uint8_t pages, const uint8_t lines, const uint8_t line_h)
     {
@@ -650,7 +627,8 @@ void md_touch::calibrate()
                     //SOUT(i); SOUT(" - ");
               pcell = (md_cell*) plist->pIndex(i);
               if ( i == 0 )
-                { this->drawEntry((char*) pcell->getobj(), i, MD4_YELLOW); }
+                { //this->drawEntry((char*) pcell->getobj(), i, MD4_YELLOW);
+                }
               else
                 { this->drawEntry((char*) pcell->getobj(), i); }
                     //SOUTLN((char*) pcell->getobj());
@@ -669,7 +647,7 @@ void md_touch::calibrate()
 
   void md_menu::drawEntry(const char* txt, uint8_t line, uint16_t color)
     {
-      pgfx_->setColor(MD4_BLACK);
+      //pgfx_->setColor(MD4_BLACK);
       pgfx_->drawRect(_x, _y[line], _ym[line], 16);
       pgfx_->commit();
       pgfx_->setFont(MENU_FONT);
@@ -680,7 +658,7 @@ void md_touch::calibrate()
 
 // ----------------------------------------------------------------
 // --- class bmp_pgm
-  bmp_pgm::bmp_pgm(mdGrafx *ptft) { _ptft = ptft; }
+  bmp_pgm::bmp_pgm(Adafruit_ILI9341* ptft) { _ptft = ptft; }
   bmp_pgm::~bmp_pgm() {}
 
   /*
