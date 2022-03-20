@@ -1,0 +1,24 @@
+-------------------- Auto-Git Log --------------------
+		Sun Mar 20 2022 20:16:21 GMT+0100 (Mitteleuropäische Normalzeit)
+------------------------------------------------------
+
+Modified files:
+* library.properties
+* src/md_touch.cpp
+* src/md_touch.h
+
+
+Created files:
+* doc/LICENSE
+* doc/README.md
+* doc/library.properties
+* src/LICENSE
+* src/library.properties
+* src/md_TouchEvent.cpp
+* src/md_TouchEvent.h
+
+
+Deleted files:
+
+
+Renamed files:

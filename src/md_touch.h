@@ -1,4 +1,4 @@
-#define _MD_TOUCH_H_
+#ifdef _MD_TOUCH_H_
 //#ifndef _MD_TOUCH_H_
   #define _MD_TOUCH_H_
 
