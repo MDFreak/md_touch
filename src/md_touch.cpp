@@ -1,3 +1,42 @@
+  #include <md_touch.h>
+  #include <md_spiffs.h>
+  #include <string>
+  #include <ArialRounded.h>
+  #include <md_defines.h>
+
+
+
+  // public implementation
+  bool md_touch::start()
+    {
+touch.begin();
+touch.setRotation(TOUCH_ROTATION);
+tevent.setResolution(tft.width(),tft.height());
+tevent.setDrawMode(false);
+//Callback Funktion registrieren
+tevent.registerOnTouchClick(onClick);
+            //tft.fillRect(LEFTMARGIN,TOPMARGIN,xposUMNS*BLOCKSIZE,yposS*BLOCKSIZE,NOPIECE);
+          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+            Serial.println("md_touch::startTouch .. initTFT .."); delay(100);
+          #endif
+      _initTFT(TFT_BL);
+          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+            Serial.println(".. clearTFT .."); delay(100);
+          #endif
+      _clearTFT();
+          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+            Serial.println(".. drawKeypad .."); delay(100);
+          #endif
+      _drawKeypad();
+          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+            Serial.println(".. wrstatus .."); delay(100);
+          #endif
+      wrStatus("TFT&Touch started");
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+            Serial.println("md_touch::startTouch ready"); delay(100);
+          #endif
+      return ISOK;
+    }
 
 #ifdef NOT_USED
 // --- includes

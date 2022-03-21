@@ -1,8 +1,8 @@
-#ifdef _MD_TOUCH_H_
-//#ifndef _MD_TOUCH_H_
+//#ifdef _MD_TOUCH_H_
+#ifndef _MD_TOUCH_H_
   #define _MD_TOUCH_H_
 
-  #include "FS.h"
+  //#include "FS.h"
   #include <SPI.h>
   #include <md_defines.h>
   #include <md_util.h>
@@ -23,20 +23,20 @@
   uint8_t oldLev(void);
 
   // --- tasks
-  void handleTouch(void * pvParameters);
-  void handleMenu(void * pvParameters);
+    //void handleTouch(void * pvParameters);
+    //void handleMenu(void * pvParameters);
 
 
   //--- class md_touch
-    #define TS_MINX 325
-    #define TS_MINY 200
-    #define TS_MAXX 3850
-    #define TS_MAXY 3700
+    //#define TS_MINX 325
+    //#define TS_MINY 200
+    //#define TS_MAXX 3850
+    //#define TS_MAXY 3700
 
-    #define TS_CAL_FILE   "touchcal.dat"
-    #define TS_CAL_MAXLEN 50
+    //#define TS_CAL_FILE   "touchcal.dat"
+    //#define TS_CAL_MAXLEN 50
 
-    class md_touch : public XPT2046_Touchscreen
+    class md_touch : public XPT2046_Touchscreen, public md_TouchEvent
       {
         public:
         	md_touch(uint8_t cspin, uint8_t tirq = 255); //, uint8_t spi_bus = VSPI);
@@ -44,14 +44,14 @@
 
           //constexpr md_touch(uint8_t cspin, uint8_t tirq=255)
         	//	: _csPin(cspin), _tirqPin(tirq) { }
-          void init(Adafruit_ILI9341* ptft, uint8_t rotation = 0);
+          void start(Adafruit_ILI9341* ptft, uint8_t rotation = 0);
           //void calibratePoint(uint16_t x, uint16_t y, uint16_t* vi, uint16_t* vj);
           bool loadCalibration();
           void doCalibration();
           void calibrate();
           //void calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj);
           bool saveCalibration(char* text, size_t len);
-          bool isTouched();
+          //bool isTouched();
           //TS_Point getPoint();
 
         private:
@@ -63,7 +63,10 @@
           uint8_t _tirqPin  = 255;
       };
 
-  //--- class md_menu
+#endif
+
+#ifdef PARKEN
+    //--- class md_menu
     /* --- menu    brief description ---
         a menu is realized with a linked list structure taking dynamic
         heap memory on startup that containes the menu texts
@@ -122,4 +125,4 @@
     #define MENUTYPE_PAGE  1
     #define MENU_MAXLINES  8
     #define MENU_FONT      ArialRoundedMTBold_14
-#endif
+#endif // PARKEN
