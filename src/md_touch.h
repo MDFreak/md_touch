@@ -36,7 +36,7 @@
     //#define TS_CAL_FILE   "touchcal.dat"
     //#define TS_CAL_MAXLEN 50
 
-    class md_touch : public md_TouchEvent
+    class md_touch
      //public Adafruit_ILI9341, public XPT2046_Touchscreen,
       {
         public:
@@ -56,12 +56,12 @@
           //TS_Point getPoint();
 
         private:
-          uint8_t _csPin    = 0;
           uint8_t _rotation = 1;
-          long    _lastStateChange = 0;
-          long    _lastTouched = 0;
 
-          uint8_t _tirqPin  = 255;
+          //long    _lastStateChange = 0;
+          //long    _lastTouched = 0;
+
+          //uint8_t _tirqPin  = 255;
       };
 
 #endif

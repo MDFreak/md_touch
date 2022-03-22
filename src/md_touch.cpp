@@ -4,9 +4,9 @@
   #include <ArialRounded.h>
   #include <md_defines.h>
 
-    static XPT2046_Touchscreen *ptouch    = NULL;
-    static Adafruit_ILI9341    *pTFT      = NULL;
-    static md_touch            *pmd_touch = NULL;
+    static XPT2046_Touchscreen *_ptouch   = NULL;
+    static Adafruit_ILI9341    *_pTFT     = NULL;
+    static md_touch            *_pmdtouch = NULL;
     //md_TouchEvent     tevent(ptouch);
     md_spiffs         conf = md_spiffs();
     static md_spiffs *pConf = &conf;
@@ -15,12 +15,10 @@
 // --- class md_touch
 	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST) //, uint8_t spi_bus)
     {
-      //pts_ = new XPT2046_Touchscreen(cspin, tirq);
-      pmdt_  = this;
-      tcs_   = cspin;
-      tirq_  = tirq;
-      //_pSPI  = p;
-      //pts_  = new mdXPT2046(tcs_, tirq_, spi_bus);
+      _pmdtouch = this;
+      _ptouch   = new XPT2046_Touchscreen(cspin);
+      _pTFT     = new Adafruit_ILI9341(tft_CS, tft_DC, tft_RST);
+      _ptouchev = new md_TouchEvent()
     }
 
   md_touch::~md_touch()
