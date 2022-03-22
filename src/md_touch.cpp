@@ -8,9 +8,7 @@
     static Adafruit_ILI9341    *_pTFT     = NULL;
     static md_touch            *_pmdtouch = NULL;
     static md_TouchEvent       *_ptouchev = NULL;
-    //md_TouchEvent     tevent(ptouch);
-    md_spiffs         conf = md_spiffs();
-    static md_spiffs *pConf = &conf;
+    static md_spiffs           *pConf     = new md_spiffs();
 
 
 // --- class md_touch
@@ -22,6 +20,7 @@
       _ptouch   = new XPT2046_Touchscreen(cspin);
       _ptouchev = new md_TouchEvent(_ptouch);
       _tft_LED  = tft_LED;
+      _LED_ON   = led_ON;
     }
 
   md_touch::~md_touch()
@@ -30,18 +29,22 @@
     }
 
   // public implementation
-  bool md_touch::start(uint8_t rotation)
+  bool md_touch::start(uint8_t rotation, un)
     {
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              Serial.println(" .. md_touch .. start user flash");
+            #endif
+      // mount user flash
+
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
               Serial.println(" .. md_touch .. start tft");
             #endif
       // start TFT
       pinMode(_tft_LED, OUTPUT);
       digitalWrite(_tft_LED, _LED_ON); // switch on backlight
-      //Display initialisieren
       _pTFT->begin();
       _pTFT->setRotation(_rotation);
-      _pTFT->fillScreen(BACKGROUND);
+      _pTFT->fillScreen(MD_GREEN);
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
               Serial.println(" .. md_touch .. start touch");
             #endif
@@ -53,18 +56,6 @@
             //tft.fillRect(LEFTMARGIN,TOPMARGIN,xposUMNS*BLOCKSIZE,yposS*BLOCKSIZE,NOPIECE);
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
             Serial.println("md_touch::startTouch .. initTFT .."); delay(100);
-          #endif
-      _initTFT(TFT_BL);
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-            Serial.println(".. clearTFT .."); delay(100);
-          #endif
-      _clearTFT();
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println(".. drawKeypad .."); delay(100);
-          #endif
-      _drawKeypad();
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println(".. wrstatus .."); delay(100);
           #endif
       wrStatus("TFT&Touch started");
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)

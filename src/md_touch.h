@@ -16,6 +16,28 @@
   #include <md_TouchEvent.h> //Auswertung von Touchscreen Ereignissen
   #include <linked_list.hpp>
 
+  // --- color definitions
+    #define MD_BLACK       0x0000      /*   0,   0,   0 */
+    #define MD_NAVY        0x000F      /*   0,   0, 128 */
+    #define MD_DARKGREEN   0x03E0      /*   0, 128,   0 */
+    #define MD_DARKCYAN    0x03EF      /*   0, 128, 128 */
+    #define MD_MAROON      0x7800      /* 128,   0,   0 */
+    #define MD_PURPLE      0x780F      /* 128,   0, 128 */
+    #define MD_OLIVE       0x7BE0      /* 128, 128,   0 */
+    #define MD_LIGHTGREY   0xC618      /* 192, 192, 192 */
+    #define MD_DARKGREY    0x7BEF      /* 128, 128, 128 */
+    #define MD_BLUE        0x001F      /*   0,   0, 255 */
+    #define MD_GREEN       0x07E0      /*   0, 255,   0 */
+    #define MD_CYAN        0x07FF      /*   0, 255, 255 */
+    #define MD_RED         0xF800      /* 255,   0,   0 */
+    #define MD_MAGENTA     0xF81F      /* 255,   0, 255 */
+    #define MD_YELLOW      0xFFE0      /* 255, 255,   0 */
+    #define MD_WHITE       0xFFFF      /* 255, 255, 255 */
+    #define MD_ORANGE      0xFD20      /* 255, 165,   0 */
+    #define MD_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
+    #define MD_PINK        0xF81F
+
+
 
   void    actLev(uint8_t level);
   uint8_t actLev(void);
@@ -54,15 +76,18 @@
           void doCalibration();
           bool checkCalibration();
           bool saveCalibration(char* text, size_t len);
+          // properties
+
           void
           //bool isTouched();
           //TS_Point getPoint();
 
 
         private:
-          uint8_t _rotation = 1;
-          uint8_t _tft_LED  = 0;
-          uint8_t _LED_ON   = 1;
+          uint8_t  _rotation = 1;
+          uint8_t  _tft_LED  = 0;
+          uint8_t  _LED_ON   = 1;
+          uint16_t _colBack  =
 
 
           //long    _lastStateChange = 0;
