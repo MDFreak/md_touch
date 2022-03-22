@@ -161,26 +161,14 @@
             {
               sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
               xpos = 30;
-              if ((raw.x < 1000) && (raw.y < 1000))
-                {
-                  ypos = 30;
-                  if (doCal == true) calP.x0y0 = raw;
-                }
-              else if ((raw.x < 1000) && (raw.y > 3000))
-                {
-                  ypos = 90;
-                  if (doCal == true) calP.x1y0 = raw;
-                }
-              else if ((raw.x > 3000) && (raw.y > 3000))
-                {
-                  ypos = 120;
-                  if (doCal == true) calP.x1y1 = raw;
-                }
+              if      ((raw.x < 1000) && (raw.y < 1000))
+                { ypos = 30;  calP.x0y0 = raw; }
               else if ((raw.x > 3000) && (raw.y < 1000))
-                {
-                  ypos = 60;
-                  if (doCal == true) calP.x0y1 = raw;
-                }
+                { ypos = 60;  calP.x1y0 = raw; }
+              else if ((raw.x < 1000) && (raw.y > 3000))
+                { ypos = 90;  calP.x0y1 = raw; }
+              else if ((raw.x > 3000) && (raw.y > 3000))
+                { ypos = 120; calP.x1y1 = raw; }
               else
                 {
                   ypos = 150;
@@ -199,12 +187,11 @@
                           calP.xmin -= dRawX/30;
                           calP.xmax += dRawX/30;
                           calP.ymin -= dRawY/22;
-                          cymax += dRawY/22;
-                          tevent.calibrate(cxmin, cymin, cxmax, cymax);
-                          Serial.print("Calib done");
+                          calP.ymax += dRawY/22;
+                          _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
+                          SOUT("Calib done");
                           doCal = false;
                           _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_BLACK);
-
                         }
                     }
                 }
@@ -215,42 +202,13 @@
               _pTFT->print(text);
               delay(500);
             }
-
+        }
     }
 
   bool saveCalibration(char* text, size_t len)
     {
-
+      ;
     }
-
-
-    pConf->init(pConf);
-    Serial.println(" .. read calib");
-          if (conf.exists("/conf.dat"))
-            {
-                            //FILE *f = fopen("/conf.dat","r");
-                            //fscanf(f,"%d,%d,%d,%d", cxmin, cymin, cxmax, cymax);
-                            //fclosescanf(f,"%d", cxmin);
-              char buf[50];
-              uint8_t res = conf.readFile("/conf.dat", 40, buf);
-              if (res == ESP_OK)
-                {
-                  Serial.print(" .. Config found ");
-                  Serial.println(buf);
-                  int a,b,c,d;
-                  sscanf(buf, "%i %i %i %i", &a, &b, &c, &d);
-                  cxmin = (uint16_t) a;
-                  cymin = (uint16_t) b;
-                  cxmax = (uint16_t) c;
-                  cymax = (uint16_t) d;
-                }
-              Serial.print("cxmin ");
-              Serial.print(cxmin); Serial.print(",");
-              Serial.print(cymin); Serial.print(",");
-              Serial.print(cxmax); Serial.print(",");
-              Serial.println(cymax);
-              tevent.calibrate(cxmin, cymin, cxmax, cymax);
-            }
 
 #ifdef NOT_USED
   // --- includes
