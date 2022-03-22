@@ -189,16 +189,16 @@
                       if (   (p.x > calWin[0]) && (p.x < calWin[0] + calWin[2])
                           && (p.y > calWin[1]) && (p.y < calWin[1] + calWin[3])
                          )
-                          cxmin = (calP[0].x + calP[2].x)/2;
                         {
-                          cxmax = (calP[1].x + calP[3].x)/2;
-                          cymin = (calP[0].y + calP[1].y)/2;
-                          cymax = (calP[2].y + calP[3].y)/2;
-                          int16_t dRawX = cxmax - cxmin;
-                          int16_t dRawY = cymax - cymin;
-                          cxmin -= dRawX/30;
-                          cxmax += dRawX/30;
-                          cymin -= dRawY/22;
+                          calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
+                          calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
+                          calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
+                          calP.ymax = (calP.x0y1.x + calP.x0y1.y)/2;
+                          int16_t dRawX = calP.xmax - calP.xmin;
+                          int16_t dRawY = calP.ymax - calP.ymin;
+                          calP.xmin -= dRawX/30;
+                          calP.xmax += dRawX/30;
+                          calP.ymin -= dRawY/22;
                           cymax += dRawY/22;
                           tevent.calibrate(cxmin, cymin, cxmax, cymax);
                           Serial.print("Calib done");
