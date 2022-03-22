@@ -32,23 +32,21 @@
   // public implementation
   bool md_touch::start(uint8_t rotation)
     {
-      Serial.println(" .. md_touch start tft");
+      Serial.println(" .. md_touch .. start tft");
       // start TFT
       pinMode(_tft_LED, OUTPUT);
-      digitalWrite(_tft_LED, _LED_ON);
+      digitalWrite(_tft_LED, _LED_ON); // switch on backlight
       //Display initialisieren
       _pTFT->begin();
       _pTFT->setRotation(_rotation);
       _pTFT->fillScreen(BACKGROUND);
 
-
-
-touch.begin();
-touch.setRotation(TOUCH_ROTATION);
-tevent.setResolution(tft.width(),tft.height());
-tevent.setDrawMode(false);
-//Callback Funktion registrieren
-tevent.registerOnTouchClick(onClick);
+      Serial.println(" .. md_touch .. start touch");
+      _ptouch->begin();
+      _ptouch->setRotation(_rotation);
+      _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
+      _ptouchev->setDrawMode(false);
+      _ptouchev->registerOnTouchClick(onClick); // //Callback Funktion registrieren
             //tft.fillRect(LEFTMARGIN,TOPMARGIN,xposUMNS*BLOCKSIZE,yposS*BLOCKSIZE,NOPIECE);
           #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
             Serial.println("md_touch::startTouch .. initTFT .."); delay(100);
