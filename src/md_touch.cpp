@@ -63,6 +63,36 @@
       return ISOK;
     }
 
+
+   Serial.println(" .. conf-flash");
+    conf.init(pConf);
+    Serial.println(" .. read calib");
+          if (conf.exists("/conf.dat"))
+            {
+                            //FILE *f = fopen("/conf.dat","r");
+                            //fscanf(f,"%d,%d,%d,%d", cxmin, cymin, cxmax, cymax);
+                            //fclosescanf(f,"%d", cxmin);
+              char buf[50];
+              uint8_t res = conf.readFile("/conf.dat", 40, buf);
+              if (res == ESP_OK)
+                {
+                  Serial.print(" .. Config found ");
+                  Serial.println(buf);
+                  int a,b,c,d;
+                  sscanf(buf, "%i %i %i %i", &a, &b, &c, &d);
+                  cxmin = (uint16_t) a;
+                  cymin = (uint16_t) b;
+                  cxmax = (uint16_t) c;
+                  cymax = (uint16_t) d;
+                }
+              Serial.print("cxmin ");
+              Serial.print(cxmin); Serial.print(",");
+              Serial.print(cymin); Serial.print(",");
+              Serial.print(cxmax); Serial.print(",");
+              Serial.println(cymax);
+              tevent.calibrate(cxmin, cymin, cxmax, cymax);
+            }
+
 #ifdef NOT_USED
 // --- includes
   #include <md_touch.h>
