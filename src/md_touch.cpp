@@ -104,14 +104,17 @@
   bool md_touch::doCalibration()
     {
       bool res = ISERR;
-      calData_t pRaw;
+      calData_t rawP, calP;
       int16_t   xpos = 1;
       int16_t   ypos = 10;
       int16_t   xmax, ymax;
       boolean   tch;
       int16_t   wx, wy;
       uint16_t  ww, wh;
+      TS_Point  raw;
+      TS_Point  p;
       int16_t   calWin[4] = {110, 160, 70, 40};
+      bool      doCal     = true;
       char      text[30];
 
       if (!pCal) { res = loadCalibration(); }
@@ -135,83 +138,83 @@
       _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
       _pTFT->print(text);
 
-          Serial.println(calWin[0]);
-          Serial.println(calWin[1]);
-          Serial.println(calWin[2]);
-          Serial.println(calWin[3]);
-          if (doCal == true)
+      SOUTLN(calWin[0]);
+      SOUTLN(calWin[1]);
+      SOUTLN(calWin[2]);
+      SOUTLN(calWin[3]);
+      if (doCal == true)
+        {
+          SOUTLN("draw Calib window");
+          //_pTFT->fillRoundRect(110,260,60,40,2,ILI9341_WHITE);
+          _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_GREEN);
+          _pTFT->drawRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_RED);
+          _pTFT->setCursor(calWin[0] + 2, calWin[1] + 10);
+          _pTFT->setTextSize(2);
+          _pTFT->setTextColor(ILI9341_BLUE);
+          _pTFT->print("Calib");
+        }
+      //get position and check if touched
+      while (1)
+        {
+          tch = _ptouchev->getTouchPos(&p, &raw);
+          if (tch)
             {
-              Serial.println("draw Calib window");
-              //_pTFT->fillRoundRect(110,260,60,40,2,ILI9341_WHITE);
-              _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_GREEN);
-              _pTFT->drawRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_RED);
-              _pTFT->setCursor(calWin[0] + 2, calWin[1] + 10);
-              _pTFT->setTextSize(2);
-              _pTFT->setTextColor(ILI9341_BLUE);
-              _pTFT->print("Calib");
-            }
-    //get position and check if touched
-    while (1)
-      {
-              tch = _ptouchev->getTouchPos(pP, ppRaw);
-              if (tch)
+              sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
+              xpos = 30;
+              if ((raw.x < 1000) && (raw.y < 1000))
                 {
-                  sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, pRaw.x, pRaw.y);
-                  xpos = 30;
-                  if ((pRaw.x < 1000) && (pRaw.y < 1000))
+                  ypos = 30;
+                  if (doCal == true) calP.x0y0 = raw;
+                }
+              else if ((raw.x < 1000) && (raw.y > 3000))
+                {
+                  ypos = 90;
+                  if (doCal == true) calP.x1y0 = raw;
+                }
+              else if ((raw.x > 3000) && (raw.y > 3000))
+                {
+                  ypos = 120;
+                  if (doCal == true) calP.x1y1 = raw;
+                }
+              else if ((raw.x > 3000) && (raw.y < 1000))
+                {
+                  ypos = 60;
+                  if (doCal == true) calP.x0y1 = raw;
+                }
+              else
+                {
+                  ypos = 150;
+                  if (doCal == true)
                     {
-                      ypos = 30;
-                      if (doCal == true) calP[0] = pRaw;
-                    }
-                  else if ((pRaw.x < 1000) && (pRaw.y > 3000))
-                    {
-                      ypos = 90;
-                      if (doCal == true) calP[2] = pRaw;
-                    }
-                  else if ((pRaw.x > 3000) && (pRaw.y > 3000))
-                    {
-                      ypos = 120;
-                      if (doCal == true) calP[3] = pRaw;
-                    }
-                  else if ((pRaw.x > 3000) && (pRaw.y < 1000))
-                    {
-                      ypos = 60;
-                      if (doCal == true) calP[1] = pRaw;
-                    }
-                  else
-                    {
-                      ypos = 150;
-                      if (doCal == true)
+                      if (   (p.x > calWin[0]) && (p.x < calWin[0] + calWin[2])
+                          && (p.y > calWin[1]) && (p.y < calWin[1] + calWin[3])
+                         )
+                          cxmin = (calP[0].x + calP[2].x)/2;
                         {
-                          if (   (p.x > calWin[0]) && (p.x < calWin[0] + calWin[2])
-                              && (p.y > calWin[1]) && (p.y < calWin[1] + calWin[3])
-                             )
-                              cxmin = (calP[0].x + calP[2].x)/2;
-                            {
-                              cxmax = (calP[1].x + calP[3].x)/2;
-                              cymin = (calP[0].y + calP[1].y)/2;
-                              cymax = (calP[2].y + calP[3].y)/2;
-                              int16_t dRawX = cxmax - cxmin;
-                              int16_t dRawY = cymax - cymin;
-                              cxmin -= dRawX/30;
-                              cxmax += dRawX/30;
-                              cymin -= dRawY/22;
-                              cymax += dRawY/22;
-                              tevent.calibrate(cxmin, cymin, cxmax, cymax);
-                              Serial.print("Calib done");
-                              doCal = false;
-                              _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_BLACK);
+                          cxmax = (calP[1].x + calP[3].x)/2;
+                          cymin = (calP[0].y + calP[1].y)/2;
+                          cymax = (calP[2].y + calP[3].y)/2;
+                          int16_t dRawX = cxmax - cxmin;
+                          int16_t dRawY = cymax - cymin;
+                          cxmin -= dRawX/30;
+                          cxmax += dRawX/30;
+                          cymin -= dRawY/22;
+                          cymax += dRawY/22;
+                          tevent.calibrate(cxmin, cymin, cxmax, cymax);
+                          Serial.print("Calib done");
+                          doCal = false;
+                          _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_BLACK);
 
-                            }
                         }
                     }
-                  _pTFT->setCursor(xpos,ypos);
-                  _pTFT->setTextSize(1);
-                  _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-                  _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-                  _pTFT->print(text);
-                  delay(500);
                 }
+              _pTFT->setCursor(xpos,ypos);
+              _pTFT->setTextSize(1);
+              _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+              _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+              _pTFT->print(text);
+              delay(500);
+            }
 
     }
 
