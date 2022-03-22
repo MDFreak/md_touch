@@ -37,18 +37,27 @@
     #define MD_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
     #define MD_PINK        0xF81F
 
+  // Parameter für Touchscreen
+  #define MINPRESSURE 10 //pressure to detect touch
+  #ifndef TS_MINX
+      #define TS_MINX 230 //minimal x return value
+      #define TS_MINY 350 //minimal y return value
+      #define TS_MAXX 3700  //maximal x return value
+      #define TS_MAXY 3900 //maximal y return value
+    #endif
+        //496 //262 //3997 //3925
+
     typedef struct calData
       {
-        uint16_t xmin = 0;
-        uint16_t xmax = 0;
-        uint16_t ymin = 0;
-        uint16_t ymax = 0;
+        uint16_t xmin = TS_MINX;
+        uint16_t xmax = TS_MAXX;
+        uint16_t ymin = TS_MINY;
+        uint16_t ymax = TS_MAXY;
         TS_Point x0y0 = {10,  10,  0};
         TS_Point x0y1 = {10,  310, 0};
         TS_Point x1y0 = {230, 10,  0};
         TS_Point x1y1 = {230, 310, 0};
-
-      }
+      } calData_t;
 
   void    actLev(uint8_t level);
   uint8_t actLev(void);
