@@ -68,11 +68,6 @@
             SOUTLN("md_touch .. startTouch .. initTFT ..");
           #endif
 
-      if (pConf != NULL)
-        {
-          delete pConf;
-          pConf = NULL;
-        }
       return ISOK;
     }
 
@@ -89,12 +84,12 @@
             {
               SOUT(" .. Config found ");
               SOUTLN(buf);
-              sscanf(buf, "%i %i %i %i", &pCal->x0y0, &pCal->x0y1, &pCal->x1y0, &pCal->x1y1);
+              sscanf(buf, "%i %i %i %i", &(pCal->x0y0), &(pCal->x0y1), &(pCal->x1y0), &(pCal->x1y1));
             }
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
               SOUT("cxmin ");
-              SOUT(&pCal->x0y0); SOUT(","); SOUT(&pCal->x0y1); SOUT(",");
-              SOUT(&pCal->x1y0); SOUT(","); SOUTLN(&pCal->x1y1);
+              SOUT(pCal->x0y0); SOUT(","); SOUT(&pCal->x0y1); SOUT(",");
+              SOUT(pCal->x1y0); SOUT(","); SOUTLN(&pCal->x1y1);
               tevent.calibrate(&pCal->x0y0, &pCal->x0y1, &pCal->x1y0, &pCal->x1y1);
             #endif
         }
@@ -103,12 +98,13 @@
   bool checkCalibration()
     {
       pCal = new calData_t(); // to be deleted after calibration
-
     }
 
   bool doCalibration()
     {
       pCal = new calData_t(); // to be deleted after calibration
+      TS_Point *ppRaw = &pRaw;
+      TS_Point  calRaw[4];
           _pTFT->setTextSize(textSize);
           for (uint8_t i = 0 ; i < 4 ; i++)
             {
