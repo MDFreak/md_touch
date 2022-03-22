@@ -32,7 +32,9 @@
   // public implementation
   bool md_touch::start(uint8_t rotation)
     {
-      Serial.println(" .. md_touch .. start tft");
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              Serial.println(" .. md_touch .. start tft");
+            #endif
       // start TFT
       pinMode(_tft_LED, OUTPUT);
       digitalWrite(_tft_LED, _LED_ON); // switch on backlight
@@ -40,19 +42,20 @@
       _pTFT->begin();
       _pTFT->setRotation(_rotation);
       _pTFT->fillScreen(BACKGROUND);
-
-      Serial.println(" .. md_touch .. start touch");
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              Serial.println(" .. md_touch .. start touch");
+            #endif
       _ptouch->begin();
       _ptouch->setRotation(_rotation);
       _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
       _ptouchev->setDrawMode(false);
-      _ptouchev->registerOnTouchClick(onClick); // //Callback Funktion registrieren
+      //_ptouchev->registerOnTouchClick(onClick); // //Callback Funktion registrieren
             //tft.fillRect(LEFTMARGIN,TOPMARGIN,xposUMNS*BLOCKSIZE,yposS*BLOCKSIZE,NOPIECE);
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
             Serial.println("md_touch::startTouch .. initTFT .."); delay(100);
           #endif
       _initTFT(TFT_BL);
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
             Serial.println(".. clearTFT .."); delay(100);
           #endif
       _clearTFT();

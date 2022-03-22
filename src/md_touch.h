@@ -2,6 +2,9 @@
 #ifndef _MD_TOUCH_H_
   #define _MD_TOUCH_H_
 
+  #ifndef DEBUG_MODE
+      #define DEBUG_MODE  CFG_DEBUG_STARTUP
+    #endif
   //#include "FS.h"
   #include <SPI.h>
   #include <md_defines.h>
@@ -45,17 +48,16 @@
                                                   uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
-          //constexpr md_touch(uint8_t cspin, uint8_t tirq=255)
-        	//	: _csPin(cspin), _tirqPin(tirq) { }
           bool start(uint8_t rotation);
-          //void calibratePoint(uint16_t x, uint16_t y, uint16_t* vi, uint16_t* vj);
+          // calibration
           bool loadCalibration();
           void doCalibration();
-          void calibrate();
-          //void calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj);
+          bool checkCalibration();
           bool saveCalibration(char* text, size_t len);
+          void
           //bool isTouched();
           //TS_Point getPoint();
+
 
         private:
           uint8_t _rotation = 1;
