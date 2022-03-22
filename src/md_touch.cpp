@@ -105,22 +105,35 @@
     {
       bool res = ISERR;
       calData_t pRaw;
+      int16_t   xpos = 1;
+      int16_t   ypos = 10;
+      int16_t   xmax, ymax;
+      boolean   tch;
+      int16_t   wx, wy;
+      uint16_t  ww, wh;
+      int16_t   calWin[4] = {110, 160, 70, 40};
+      char      text[30];
+
       if (!pCal) { res = loadCalibration(); }
 
-      _pTFT->setTextSize(textSize);
-      for (uint8_t i = 0 ; i < 4 ; i++)
+      _pTFT->setTextSize(1);
+      uint8_t i = _rotation % 4;
+      switch (i)
         {
-          setLimits(i);
-          _pTFT->setRotation(i);
-          xpos = 10 + 10; ypos = 10;
-          _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
-          sprintf(text,"r %1i", i);
-          _pTFT->setCursor(xpos,ypos);
-          _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-          _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-          _pTFT->print(text);
+          case 0: xmax = 240; ymax = 320; break;
+          case 1: xmax = 320; ymax = 240; break;
+          case 2: xmax = 240; ymax = 320; break;
+          case 3:
+          default: xmax = 320; ymax = 240; break;
         }
-      delay(3000);
+      _pTFT->setRotation(i);
+      xpos = 10 + 10; ypos = 10;
+      _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
+      sprintf(text,"r %1i", i);
+      _pTFT->setCursor(xpos,ypos);
+      _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+      _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+      _pTFT->print(text);
 
           Serial.println(calWin[0]);
           Serial.println(calWin[1]);
