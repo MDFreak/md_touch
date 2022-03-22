@@ -88,37 +88,39 @@
             }
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
               SOUT("cxmin ");
-              SOUT(pCal->x0y0); SOUT(","); SOUT(&pCal->x0y1); SOUT(",");
-              SOUT(pCal->x1y0); SOUT(","); SOUTLN(&pCal->x1y1);
-              tevent.calibrate(&pCal->x0y0, &pCal->x0y1, &pCal->x1y0, &pCal->x1y1);
+              SOUT(pCal->xmin); SOUT(","); SOUT(pCal->ymin); SOUT(",");
+              SOUT(pCal->xmax); SOUT(","); SOUTLN(pCal->ymax);
+              _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
             #endif
         }
     }
 
-  bool checkCalibration()
+  bool md_touch::checkCalibration()
     {
-      pCal = new calData_t(); // to be deleted after calibration
+      bool res = ISERR;
+      if (!pCal) { res = loadCalibration(); }
     }
 
-  bool doCalibration()
+  bool md_touch::doCalibration()
     {
-      pCal = new calData_t(); // to be deleted after calibration
-      TS_Point *ppRaw = &pRaw;
-      TS_Point  calRaw[4];
-          _pTFT->setTextSize(textSize);
-          for (uint8_t i = 0 ; i < 4 ; i++)
-            {
-              setLimits(i);
-              _pTFT->setRotation(i);
-              xpos = 10 + 10; ypos = 10;
-              _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
-              sprintf(text,"r %1i", i);
-              _pTFT->setCursor(xpos,ypos);
-              _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-              _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-              _pTFT->print(text);
-            }
-          delay(3000);
+      bool res = ISERR;
+      calData_t pRaw;
+      if (!pCal) { res = loadCalibration(); }
+
+      _pTFT->setTextSize(textSize);
+      for (uint8_t i = 0 ; i < 4 ; i++)
+        {
+          setLimits(i);
+          _pTFT->setRotation(i);
+          xpos = 10 + 10; ypos = 10;
+          _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
+          sprintf(text,"r %1i", i);
+          _pTFT->setCursor(xpos,ypos);
+          _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+          _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+          _pTFT->print(text);
+        }
+      delay(3000);
 
           Serial.println(calWin[0]);
           Serial.println(calWin[1]);
