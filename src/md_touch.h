@@ -90,10 +90,10 @@
                                                   uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
-          bool    start(uint8_t rotation, uint16_t background = _COL_BACK);
+          bool    start(uint8_t rotation, uint16_t background = MD_BLACK);
             // calibration
           bool    loadCalibration();
-          void    doCalibration();
+          bool    doCalibration();
           bool    checkCalibration();
           bool    saveCalibration(char* text, size_t len);
             // properties
