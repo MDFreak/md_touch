@@ -4,11 +4,36 @@
   #include <ArialRounded.h>
   #include <md_defines.h>
 
+    //Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+    XPT2046_Touchscreen *ptouch = NULL;
+    Adafruit_ILI9341    *pTFT   = NULL;
+    XPT2046_Touchscreen *ptouch = NULL;
+    //md_touch          touch(TOUCH_CS);
+    //static md_touch  *pTouch = &touch;
+    md_TouchEvent     tevent(ptouch);
+    md_spiffs         conf = md_spiffs();
+    static md_spiffs *pConf = &conf;
 
 
   // public implementation
-  bool md_touch::start()
+  bool md_touch::start(uint8_t rotation, tft_CS, tft_DC, tft_RST)
     {
+      Adafruit_ILI9341 pTFT = new(Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+    XPT2046_Touchscreen  touch(TOUCH_CS);
+    XPT2046_Touchscreen *ptouch = &touch;
+
+
+//Hintergrundbeleuchtung einschalten
+pinMode(TFT_LED,OUTPUT);
+digitalWrite(TFT_LED, LED_ON);
+//Display initialisieren
+Serial.println(" .. tft");
+tft.begin();
+tft.setRotation(TOUCH_ROTATION);
+tft.fillScreen(BACKGROUND);
+
+
+
 touch.begin();
 touch.setRotation(TOUCH_ROTATION);
 tevent.setResolution(tft.width(),tft.height());
