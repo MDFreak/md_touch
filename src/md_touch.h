@@ -13,6 +13,7 @@
   #include <md_TouchEvent.h> //Auswertung von Touchscreen Ereignissen
   #include <linked_list.hpp>
 
+
   void    actLev(uint8_t level);
   uint8_t actLev(void);
   void    oldLev(uint8_t level);
@@ -40,12 +41,13 @@
      //public Adafruit_ILI9341, public XPT2046_Touchscreen,
       {
         public:
-        	md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST); //, uint8_t spi_bus = VSPI);
+        	md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
+                                                  uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
           //constexpr md_touch(uint8_t cspin, uint8_t tirq=255)
         	//	: _csPin(cspin), _tirqPin(tirq) { }
-          void start(uint8_t rotation);
+          bool start(uint8_t rotation);
           //void calibratePoint(uint16_t x, uint16_t y, uint16_t* vi, uint16_t* vj);
           bool loadCalibration();
           void doCalibration();
@@ -57,6 +59,8 @@
 
         private:
           uint8_t _rotation = 1;
+          uint8_t _tft_LED  = 0;
+          uint8_t _LED_ON   = 1;
 
           //long    _lastStateChange = 0;
           //long    _lastTouched = 0;

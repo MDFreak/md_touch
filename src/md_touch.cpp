@@ -7,18 +7,21 @@
     static XPT2046_Touchscreen *_ptouch   = NULL;
     static Adafruit_ILI9341    *_pTFT     = NULL;
     static md_touch            *_pmdtouch = NULL;
+    static md_TouchEvent       *_ptouchev = NULL;
     //md_TouchEvent     tevent(ptouch);
     md_spiffs         conf = md_spiffs();
     static md_spiffs *pConf = &conf;
 
 
 // --- class md_touch
-	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST) //, uint8_t spi_bus)
+	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
+                                                    uint8_t tft_LED, uint8_t led_ON) //, uint8_t spi_bus)
     {
       _pmdtouch = this;
-      _ptouch   = new XPT2046_Touchscreen(cspin);
       _pTFT     = new Adafruit_ILI9341(tft_CS, tft_DC, tft_RST);
-      _ptouchev = new md_TouchEvent()
+      _ptouch   = new XPT2046_Touchscreen(cspin);
+      _ptouchev = new md_TouchEvent(_ptouch);
+      _tft_LED  = tft_LED;
     }
 
   md_touch::~md_touch()
@@ -29,19 +32,14 @@
   // public implementation
   bool md_touch::start(uint8_t rotation)
     {
-      Adafruit_ILI9341 pTFT = new(Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
-    XPT2046_Touchscreen  touch(TOUCH_CS);
-    XPT2046_Touchscreen *ptouch = &touch;
-
-
-//Hintergrundbeleuchtung einschalten
-pinMode(TFT_LED,OUTPUT);
-digitalWrite(TFT_LED, LED_ON);
-//Display initialisieren
-Serial.println(" .. tft");
-tft.begin();
-tft.setRotation(TOUCH_ROTATION);
-tft.fillScreen(BACKGROUND);
+      Serial.println(" .. md_touch start tft");
+      // start TFT
+      pinMode(_tft_LED, OUTPUT);
+      digitalWrite(_tft_LED, _LED_ON);
+      //Display initialisieren
+      _pTFT->begin();
+      _pTFT->setRotation(_rotation);
+      _pTFT->fillScreen(BACKGROUND);
 
 
 
