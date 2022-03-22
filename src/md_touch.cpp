@@ -9,7 +9,7 @@
     static md_touch            *_pmdtouch = NULL;
     static md_TouchEvent       *_ptouchev = NULL;
     static md_spiffs           *pConf     = new md_spiffs();
-
+    static calData_t           *pCal      = NULL;
 
 // --- class md_touch
 	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
@@ -31,11 +31,7 @@
   // public implementation
   bool md_touch::start(uint8_t rotation, uint16_t background)
     {
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN(" .. md_touch .. start user flash");
-            #endif
-        // mount user flash
-
+      bool res = false;
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
               SOUTLN(" .. md_touch .. start tft");
             #endif
@@ -56,16 +52,58 @@
       _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
       _ptouchev->setDrawMode(false);
 
+      res = loadCalibration();
+      if (res)
+        {
 
+        }
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-            SOUTLN("md_touch::startTouch .. initTFT ..");
+            SOUTLN("md_touch .. startTouch .. initTFT ..");
           #endif
       return ISOK;
     }
 
+  bool md_touch::loadCalibration()
+    {
+      Serial.println(" .. read calib");
+      pConf->init(pConf);
+      if (pConf->exists("/conf.dat"))
+        {
+          char buf[50];
+          uint8_t res = pConf->readFile("/conf.dat", 40, buf);
+          if (res == ESP_OK)
+            {
+              pCal = new calData_t();
+              SOUT(" .. Config found ");
+              SOUTLN(buf);
+              sscanf(buf, "%i %i %i %i", &pCal->x0y0, &pCal->x0y1, &pCal->x1y0, &pCal->x1y1);
+            }
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              SOUT("cxmin ");
+              SOUT(&pCal->x0y0); SOUT(","); SOUT(&pCal->x0y1); SOUT(",");
+              SOUT(&pCal->x1y0); SOUT(","); SOUTLN(&pCal->x1y1);
+              tevent.calibrate(&pCal->x0y0, &pCal->x0y1, &pCal->x1y0, &pCal->x1y1);
+            #endif
+        }
+    }
 
-   Serial.println(" .. conf-flash");
-    conf.init(pConf);
+  bool checkCalibration()
+    {
+
+    }
+
+  void doCalibration()
+    {
+
+    }
+
+  bool saveCalibration(char* text, size_t len)
+    {
+
+    }
+
+
+    pConf->init(pConf);
     Serial.println(" .. read calib");
           if (conf.exists("/conf.dat"))
             {
