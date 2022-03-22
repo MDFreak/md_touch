@@ -36,16 +36,16 @@
     //#define TS_CAL_FILE   "touchcal.dat"
     //#define TS_CAL_MAXLEN 50
 
-    class md_touch
-     //public Adafruit_ILI9341, public XPT2046_Touchscreen, public md_TouchEvent
+    class md_touch : public md_TouchEvent
+     //public Adafruit_ILI9341, public XPT2046_Touchscreen,
       {
         public:
-        	md_touch(uint8_t cspin, uint8_t tirq = 255); //, uint8_t spi_bus = VSPI);
+        	md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
           //constexpr md_touch(uint8_t cspin, uint8_t tirq=255)
         	//	: _csPin(cspin), _tirqPin(tirq) { }
-          void start(Adafruit_ILI9341* ptft, uint8_t rotation = 0, );
+          void start(uint8_t rotation);
           //void calibratePoint(uint16_t x, uint16_t y, uint16_t* vi, uint16_t* vj);
           bool loadCalibration();
           void doCalibration();
