@@ -37,7 +37,18 @@
     #define MD_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
     #define MD_PINK        0xF81F
 
+    typedef struct calData
+      {
+        uint16_t xmin = 0;
+        uint16_t xmax = 0;
+        uint16_t ymin = 0;
+        uint16_t ymax = 0;
+        TS_Point x0y0 = {10,  10,  0};
+        TS_Point x0y1 = {10,  310, 0};
+        TS_Point x1y0 = {230, 10,  0};
+        TS_Point x1y1 = {230, 310, 0};
 
+      }
 
   void    actLev(uint8_t level);
   uint8_t actLev(void);
@@ -70,15 +81,15 @@
                                                   uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
-          bool start(uint8_t rotation);
-          // calibration
-          bool loadCalibration();
-          void doCalibration();
-          bool checkCalibration();
-          bool saveCalibration(char* text, size_t len);
-          // properties
-
-          void
+          bool    start(uint8_t rotation, uint16_t background = _COL_BACK);
+            // calibration
+          bool    loadCalibration();
+          void    doCalibration();
+          bool    checkCalibration();
+          bool    saveCalibration(char* text, size_t len);
+            // properties
+          void    rotation(uint8_t _rotatio) { _rotation = _rotatio; }
+          uint8_t rotation()                 { return _rotation; }
           //bool isTouched();
           //TS_Point getPoint();
 
@@ -87,7 +98,7 @@
           uint8_t  _rotation = 1;
           uint8_t  _tft_LED  = 0;
           uint8_t  _LED_ON   = 1;
-          uint16_t _colBack  =
+          uint16_t _COL_BACK = MD_BLACK;
 
 
           //long    _lastStateChange = 0;
