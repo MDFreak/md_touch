@@ -127,23 +127,54 @@
 
       _pTFT->setTextSize(1);
       uint8_t i = _rotation % 4;
-      switch (i)
+      switch (i) // set max limits
         {
-          case 0: xmax = 240; ymax = 320; break;
-          case 1: xmax = 320; ymax = 240; break;
-          case 2: xmax = 240; ymax = 320; break;
-          case 3:
+          case 0:  xmax = 240; ymax = 320; break;
+          case 1:  xmax = 320; ymax = 240; break;
+          case 2:  xmax = 240; ymax = 320; break;
           default: xmax = 320; ymax = 240; break;
         }
       _pTFT->setRotation(i);
 
-      xpos = 10 + 10; ypos = 10;
-      _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
-      sprintf(text,"r %1i", i);
-      _pTFT->setCursor(xpos,ypos);
-      _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-      _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-      _pTFT->print(text);
+      for ( i = 0; i < 4 ; i++ )  // calibrations points
+        {
+          switch (i)
+            {
+              case 0:
+                xpos = 10; //
+                ypos = 10;
+                wx   = 10;
+                wy   = 0;
+                break;
+              case 1:
+                xpos = xmax -10;
+                ypos = 10;
+                wx   = -60;
+                wy   = 0;
+                break;
+              case 2:
+                xpos = 10;
+                ypos = ymax -10;
+                wx   = 10;
+                wy   = -10;
+                break;
+              default:
+                xpos = xmax - 10;
+                ypos = ymax - 10;
+                wx   = -60;
+                wy   = -10;
+                break;
+            }
+          _pTFT->drawRoundRect( xpos, ypos, 3, 3, 1, ILI9341_YELLOW);
+          sprintf(text,"%i / %i", xpos, ypos);
+          xpos += wx;
+          ypos += wy;
+          _pTFT->setCursor(xpos, ypos);
+          _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+          _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+          _pTFT->print(text);
+        }
+
 
       SOUTLN(calWin[0]);
       SOUTLN(calWin[1]);
