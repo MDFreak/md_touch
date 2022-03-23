@@ -213,12 +213,12 @@
                   SOUTLN("Rechnung");
                   SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
                   calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
-                  SOUT("x0/1y0 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x1y0.x);
+                  SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
                   calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
                   SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
                   calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                  SOUT("x0/1y1 "); SOUT(calP.x0y1.x); SOUT("/"); SOUTLN(calP.x1y1.x);
-                  calP.ymax = (calP.x0y1.x + calP.x1y1.y)/2;
+                  SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
+                  calP.ymax = (calP.x0y1.y + calP.x1y1.y)/2;
                   int16_t dRawX = calP.xmax - calP.xmin;
                   int16_t dRawY = calP.ymax - calP.ymin;
                   calP.xmin -= 10 * dRawX / (xmax - 20);
