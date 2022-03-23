@@ -87,16 +87,14 @@
             {
               SOUT(" .. Config found ");
               SOUTLN(buf);
-              sscanf(buf, "%i %i %i %i", &(pCal->xmin), &(pCal->ymin), &(pCal->xmax), &(pCal->ymax));
-              sscanf(buf, "%i %i %i %i", &a, &b, &c, &d);
+              sscanf(&buf[0], "%i %i %i %i", &a, &b, &c, &d);
+              //sscanf(&buf[0], "%i %i %i %i", &(pCal->xmin), &(pCal->ymin), &(pCal->xmax), &(pCal->ymax));
+              pCal->xmin = a; pCal->ymin = b; pCal->xmax = c; pCal->ymax = d;
             }
                 #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                     SOUT("     cxmin ");
                     SOUT(pCal->xmin); SOUT(","); SOUT(pCal->ymin); SOUT(",");
                     SOUT(pCal->xmax); SOUT(","); SOUTLN(pCal->ymax);
-                    SOUT("   a cxmin ");
-                    SOUT(a); SOUT(","); SOUT(b); SOUT(",");
-                    SOUT(c); SOUT(","); SOUTLN(d);
                     _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
                   #endif
         }
@@ -125,7 +123,7 @@
       bool      doCal     = true;
       char      text[30];
 
-      if (!pCal) { res = loadCalibration(); }
+      if (!pCal) { SOUTLN(" doCal  !!! no cal struct !!!"); res = loadCalibration(); }
 
       _pTFT->setTextSize(1);
       uint8_t i = _rotation % 4;
@@ -138,6 +136,7 @@
           default: xmax = 320; ymax = 240; break;
         }
       _pTFT->setRotation(i);
+
       xpos = 10 + 10; ypos = 10;
       _pTFT->drawRoundRect(10,      10, 3, 3, 1, ILI9341_YELLOW);
       sprintf(text,"r %1i", i);
