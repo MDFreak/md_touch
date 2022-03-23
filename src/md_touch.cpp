@@ -119,7 +119,7 @@
       uint16_t  ww, wh;
       TS_Point  raw;
       TS_Point  p;
-      int16_t   calWin[4] = {110, 160, 70, 40};
+      int16_t   butCal[4] = {110, 160, 70, 40};
       bool      doCal     = true;
       char      text[30];
 
@@ -175,18 +175,13 @@
           _pTFT->print(text);
         }
 
-
-      SOUTLN(calWin[0]);
-      SOUTLN(calWin[1]);
-      SOUTLN(calWin[2]);
-      SOUTLN(calWin[3]);
       if (doCal == true)
         {
           SOUTLN("draw Calib window");
           //_pTFT->fillRoundRect(110,260,60,40,2,ILI9341_WHITE);
-          _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_GREEN);
-          _pTFT->drawRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_RED);
-          _pTFT->setCursor(calWin[0] + 2, calWin[1] + 10);
+          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_GREEN);
+          _pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_RED);
+          _pTFT->setCursor(butCal[0] + 2, butCal[1] + 10);
           _pTFT->setTextSize(2);
           _pTFT->setTextColor(ILI9341_BLUE);
           _pTFT->print("Calib");
@@ -212,8 +207,8 @@
                   ypos = 150;
                   if (doCal == true)
                     {
-                      if (   (p.x > calWin[0]) && (p.x < calWin[0] + calWin[2])
-                          && (p.y > calWin[1]) && (p.y < calWin[1] + calWin[3])
+                      if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
+                          && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
                          )
                         {
                           calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
@@ -222,14 +217,14 @@
                           calP.ymax = (calP.x0y1.x + calP.x0y1.y)/2;
                           int16_t dRawX = calP.xmax - calP.xmin;
                           int16_t dRawY = calP.ymax - calP.ymin;
-                          calP.xmin -= dRawX/30;
-                          calP.xmax += dRawX/30;
-                          calP.ymin -= dRawY/22;
-                          calP.ymax += dRawY/22;
+                          calP.xmin -= 10 * dRawX / (xmax - 20);
+                          calP.xmax += 10 * dRawX / (xmax - 20);
+                          calP.ymin -= 10 * dRawY / (ymax - 20);
+                          calP.ymax += 10 * dRawY / (ymax - 20);
                           _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
                           SOUT("Calib done");
                           doCal = false;
-                          _pTFT->fillRoundRect(calWin[0], calWin[1], calWin[2], calWin[3], 2, ILI9341_BLACK);
+                          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_BLACK);
                         }
                     }
                 }
