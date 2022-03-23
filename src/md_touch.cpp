@@ -119,8 +119,9 @@
       uint16_t  ww, wh;
       TS_Point  raw;
       TS_Point  p;
-      int16_t   butCal[4] = {110, 160, 70, 40};
-      bool      doCal     = true;
+      int16_t   butCal[4]  = {70, 160, 70, 30};
+      int16_t   butExit[4] = {145, 160, 55, 30};
+      bool      doExit     = false;
       char      text[30];
 
       if (!pCal) { SOUTLN(" doCal  !!! no cal struct !!!"); res = loadCalibration(); }
@@ -136,7 +137,7 @@
         }
       _pTFT->setRotation(i);
 
-      for ( i = 0; i < 4 ; i++ )  // calibrations points
+      for ( i = 0; i < 4 ; i++ )  // draw calibrations points
         {
           switch (i)
             {
@@ -144,13 +145,13 @@
                 xpos = 10; //
                 ypos = 10;
                 wx   = 10;
-                wy   = 0;
+                wy   = 5;
                 break;
               case 1:
                 xpos = xmax -10;
                 ypos = 10;
                 wx   = -60;
-                wy   = 0;
+                wy   = 5;
                 break;
               case 2:
                 xpos = 10;
@@ -175,17 +176,18 @@
           _pTFT->print(text);
         }
 
-      if (doCal == true)
-        {
-          SOUTLN("draw Calib window");
-          //_pTFT->fillRoundRect(110,260,60,40,2,ILI9341_WHITE);
-          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_GREEN);
-          _pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_RED);
-          _pTFT->setCursor(butCal[0] + 2, butCal[1] + 10);
-          _pTFT->setTextSize(2);
-          _pTFT->setTextColor(ILI9341_BLUE);
-          _pTFT->print("Calib");
-        }
+            SOUTLN("draw buttons");
+        _pTFT->setTextSize(2);
+        _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+        //_pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+        _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
+        _pTFT->setTextColor(MD_YELLOW);
+        _pTFT->print("Calib");
+        _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
+        //_pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
+        _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
+        _pTFT->setTextColor(MD_BLUE);
+        _pTFT->print("Done");
       //get position and check if touched
       while (1)
         {
@@ -193,47 +195,50 @@
           if (tch)
             {
               sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
-              xpos = 30;
-              if      ((raw.x < 1000) && (raw.y < 1000))
+              xpos = 25;
+              ypos = 110;
+              if (   (p.x > butExit[0]) && (p.x < butExit[0] + butExit[2])
+                  && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
+                 )
+                {
+                  SOUT("Calib done");
+                  doExit = true;
+                  _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
+                  _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
+                }
+              else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
+                  && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
+                 )
+                {
+                  calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
+                  calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
+                  calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
+                  calP.ymax = (calP.x0y1.x + calP.x0y1.y)/2;
+                  int16_t dRawX = calP.xmax - calP.xmin;
+                  int16_t dRawY = calP.ymax - calP.ymin;
+                  calP.xmin -= 10 * dRawX / (xmax - 20);
+                  calP.xmax += 10 * dRawX / (xmax - 20);
+                  calP.ymin -= 10 * dRawY / (ymax - 20);
+                  calP.ymax += 10 * dRawY / (ymax - 20);
+                  _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
+                }
+              else if ((raw.x < 1000) && (raw.y < 1000))
                 { ypos = 30;  calP.x0y0 = raw; }
               else if ((raw.x > 3000) && (raw.y < 1000))
-                { ypos = 60;  calP.x1y0 = raw; }
+                { ypos = 50;  calP.x1y0 = raw; }
               else if ((raw.x < 1000) && (raw.y > 3000))
-                { ypos = 90;  calP.x0y1 = raw; }
+                { ypos = 70;  calP.x0y1 = raw; }
               else if ((raw.x > 3000) && (raw.y > 3000))
-                { ypos = 120; calP.x1y1 = raw; }
+                { ypos = 90; calP.x1y1 = raw; }
               else
                 {
-                  ypos = 150;
-                  if (doCal == true)
-                    {
-                      if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
-                          && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
-                         )
-                        {
-                          calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
-                          calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
-                          calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                          calP.ymax = (calP.x0y1.x + calP.x0y1.y)/2;
-                          int16_t dRawX = calP.xmax - calP.xmin;
-                          int16_t dRawY = calP.ymax - calP.ymin;
-                          calP.xmin -= 10 * dRawX / (xmax - 20);
-                          calP.xmax += 10 * dRawX / (xmax - 20);
-                          calP.ymin -= 10 * dRawY / (ymax - 20);
-                          calP.ymax += 10 * dRawY / (ymax - 20);
-                          _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
-                          SOUT("Calib done");
-                          doCal = false;
-                          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, ILI9341_BLACK);
-                        }
-                    }
                 }
               _pTFT->setCursor(xpos,ypos);
               _pTFT->setTextSize(1);
               _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
               _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
               _pTFT->print(text);
-              delay(500);
+              usleep(500000);
             }
         }
     }
