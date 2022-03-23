@@ -79,7 +79,14 @@
       pCal = new calData_t(); // to be deleted after calibration
       Serial.println(" .. read calib");
       pConf->init(pConf);
-      if (pConf->exists("/conf.dat"))
+      if (pConf->exists("/tcalib.dat"))
+        {
+          char buf[50];
+          res = pConf->readFile("/tcalib.dat", 40, buf);
+
+
+        }
+      else if (pConf->exists("/conf.dat"))
         {
           char buf[50];
           res = pConf->readFile("/conf.dat", 40, buf);
@@ -201,23 +208,25 @@
                   && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
                  )
                 {
-                  SOUT("Calib done");
+                  SOUTLN("Calib done");
                   doExit = true;
                   _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
                   _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
                 }
               else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
-                  && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
-                 )
+                       && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
+                      )
                 {
-                  SOUTLN("Rechnung");
-                  SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
+                      /*
+                        SOUTLN("Rechnung");
+                        SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
+                        SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
+                        SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
+                        SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
+                       */
                   calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
-                  SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
                   calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
-                  SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
                   calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                  SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
                   calP.ymax = (calP.x0y1.y + calP.x1y1.y)/2;
                   int16_t dRawX = calP.xmax - calP.xmin;
                   int16_t dRawY = calP.ymax - calP.ymin;
@@ -229,7 +238,7 @@
                 }
               else if ((raw.x < 1000) && (raw.y < 1000))
                 { ypos = 30;  calP.x0y0 = raw;
-                  SOUT("x "); SOUT(calP.xmin); SOUT("y "); SOUT(calP.ymin);
+                  SOUT("       "); SOUT(calP.xmin); SOUT("/"); SOUTLN(calP.ymin);
                 }
               else if ((raw.x > 3000) && (raw.y < 1000))
                 { ypos = 50;  calP.x1y0 = raw; }
