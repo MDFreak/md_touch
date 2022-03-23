@@ -75,7 +75,8 @@
   bool md_touch::loadCalibration()
     {
       uint16_t a,b,c,d;
-      uint8_t res;
+      uint8_t  res;
+      bool     new = true;
       pCal = new calData_t(); // to be deleted after calibration
       Serial.println(" .. read calib");
       pConf->init(pConf);
