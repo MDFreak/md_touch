@@ -210,10 +210,15 @@
                   && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
                  )
                 {
+                  SOUTLN("Rechnung");
+                  SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
                   calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
+                  SOUT("x0/1y0 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x1y0.x);
                   calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
+                  SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
                   calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                  calP.ymax = (calP.x0y1.x + calP.x0y1.y)/2;
+                  SOUT("x0/1y1 "); SOUT(calP.x0y1.x); SOUT("/"); SOUTLN(calP.x1y1.x);
+                  calP.ymax = (calP.x0y1.x + calP.x1y1.y)/2;
                   int16_t dRawX = calP.xmax - calP.xmin;
                   int16_t dRawY = calP.ymax - calP.ymin;
                   calP.xmin -= 10 * dRawX / (xmax - 20);
@@ -223,7 +228,9 @@
                   _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
                 }
               else if ((raw.x < 1000) && (raw.y < 1000))
-                { ypos = 30;  calP.x0y0 = raw; }
+                { ypos = 30;  calP.x0y0 = raw;
+                  SOUT("x "); SOUT(calP.xmin); SOUT("y "); SOUT(calP.ymin);
+                }
               else if ((raw.x > 3000) && (raw.y < 1000))
                 { ypos = 50;  calP.x1y0 = raw; }
               else if ((raw.x < 1000) && (raw.y > 3000))
