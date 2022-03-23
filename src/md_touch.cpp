@@ -52,47 +52,55 @@
       _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
       _ptouchev->setDrawMode(false);
 
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              SOUTLN("             .. load calibration .. ");
+            #endif
       res = loadCalibration();
-      if (res)
-        {
-          res = ISOK;
-        }
-      else
+      if (res == ISOK)
         {
           #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-            SOUTLN(" .. md_touch .. calibrate touch");
-          #endif
+              SOUTLN("             .. load calibration ok ");
+            #endif
+ //       }
+ //     else
+ //       {
+          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+              SOUTLN("is to be calibrated");
+            #endif
           res = doCalibration();
         }
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-            SOUTLN("md_touch .. startTouch .. initTFT ..");
-          #endif
-
       return ISOK;
     }
 
   bool md_touch::loadCalibration()
     {
+      uint16_t a,b,c,d;
+      uint8_t res;
       pCal = new calData_t(); // to be deleted after calibration
       Serial.println(" .. read calib");
       pConf->init(pConf);
       if (pConf->exists("/conf.dat"))
         {
           char buf[50];
-          uint8_t res = pConf->readFile("/conf.dat", 40, buf);
+          res = pConf->readFile("/conf.dat", 40, buf);
           if (res == ESP_OK)
             {
               SOUT(" .. Config found ");
               SOUTLN(buf);
-              sscanf(buf, "%i %i %i %i", &(pCal->x0y0), &(pCal->x0y1), &(pCal->x1y0), &(pCal->x1y1));
+              sscanf(buf, "%i %i %i %i", &(pCal->xmin), &(pCal->ymin), &(pCal->xmax), &(pCal->ymax));
+              sscanf(buf, "%i %i %i %i", &a, &b, &c, &d);
             }
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUT("cxmin ");
-              SOUT(pCal->xmin); SOUT(","); SOUT(pCal->ymin); SOUT(",");
-              SOUT(pCal->xmax); SOUT(","); SOUTLN(pCal->ymax);
-              _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
-            #endif
+                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                    SOUT("     cxmin ");
+                    SOUT(pCal->xmin); SOUT(","); SOUT(pCal->ymin); SOUT(",");
+                    SOUT(pCal->xmax); SOUT(","); SOUTLN(pCal->ymax);
+                    SOUT("   a cxmin ");
+                    SOUT(a); SOUT(","); SOUT(b); SOUT(",");
+                    SOUT(c); SOUT(","); SOUTLN(d);
+                    _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
+                  #endif
         }
+      return res;
     }
 
   bool md_touch::checkCalibration()
