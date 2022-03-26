@@ -10,260 +10,430 @@
     static md_TouchEvent       *_ptouchev = NULL;
     static md_spiffs           *pConf     = new md_spiffs();
     static calData_t           *pCal      = NULL;
+    static uint8_t             _rotation  = 3;
+    static uint16_t            _COL_BACK  = MD_BLACK;
 
+// --- class tColors
+// --- class tBoxColors
+// --- class tPoint
+// --- class tText
+  void tText::setText(const char* pTxt)
+    {
+      //SOUT(" setText .. "); SOUT(pTxt); SOUT(" "); SOUT(_len);
+      if (_text != NULL) delete _text;
+      _text=new char[_len+1];
+      memcpy( _text, (char*) pTxt, _len);
+      _text[_len]=0;
+      //SOUT(" neu "); SOUTLN(_text);
+    }
+
+  void  tText::setText(String Text)
+    {
+
+    }
+
+  char* tText::getText(char* pText)
+    {
+      memcpy(pText, _text, sizeof(_text));
+      return pText;
+    }
+
+// --- class tBox
+// --- class tButton
+  void tButton::show()
+    {
+      uint8_t  len;
+      int16_t  x = _x;
+      int16_t  y = _y;
+      uint16_t w, h;
+      _pTFT->fillRoundRect(_x, _y, _w, _h, 2, _cols.colBut(_mode));
+      _pTFT->setTextSize(_size);
+      h = _size * TXT_CHAR1_H;  // hight of 1 char
+      w = _size * TXT_CHAR1_W;  // width of 1 char
+      len = _w / w;      // max count of char
+      if (strlen(_text) < len)
+        {
+          len = strlen(_text);
+        }
+      else
+        {
+          _text[len] = 0;
+        }
+      w = w * len;
+      y++;
+      if (h < _h) { y = _y + (_h - h) / 2; }
+      x++; // pos +1 in window
+      switch(_bpos)
+        {
+          case TXT_CENTER:
+            if (_w > w) { x += (_w - w) / 2; }
+            break;
+          case TXT_RIGHT:
+            if (_w > w) { x += (_w - w) - 2; }
+            break;
+          default: // TXT_LEFT
+            break;
+        }
+      _pTFT->setCursor(x, y);
+      _pTFT->setTextColor(_cols.colText(_mode));
+            //SOUT(" show "); SOUTLN(_text);
+      _pTFT->print(_text);
+    }
+
+  void tButton::hide()
+    {
+      _pTFT->fillRoundRect(_x, _y, _w, _h, 2, _COL_BACK);
+    }
+
+// --- class calData
 // --- class md_touch
-	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
-                                                    uint8_t tft_LED, uint8_t led_ON) //, uint8_t spi_bus)
-    {
-      _pmdtouch = this;
-      _pTFT     = new Adafruit_ILI9341(tft_CS, tft_DC, tft_RST);
-      _ptouch   = new XPT2046_Touchscreen(cspin);
-      _ptouchev = new md_TouchEvent(_ptouch);
-      _tft_LED  = tft_LED;
-      _LED_ON   = led_ON;
-    }
+  // construtors
+  	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
+                                                      uint8_t tft_LED, uint8_t led_ON) //, uint8_t spi_bus)
+      {
+        _pmdtouch = this;
+        _pTFT     = new Adafruit_ILI9341(tft_CS, tft_DC, tft_RST);
+        _ptouch   = new XPT2046_Touchscreen(cspin);
+        _ptouchev = new md_TouchEvent(_ptouch);
+        _ledpin  = tft_LED;
+        _LED_ON   = led_ON;
+      }
 
-  md_touch::~md_touch()
-    {
-      //pts_ = NULL;
-    }
+    md_touch::~md_touch()
+      {
+        _pmdtouch = NULL;
+      }
 
   // public implementation
-  bool md_touch::start(uint8_t rotation, uint16_t background)
-    {
-      bool res = ISERR;
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN(" .. md_touch .. start tft");
-            #endif
+    void md_touch::wrStatus(const char* msg, uint8_t mode)
+      {
+        _statbox.setText(msg);
+        _statbox.show(mode);
+      }
+
+    void md_touch::wrStatus(String msg, uint8_t mode)
+      {
+      }
+
+    void    setRotation(uint8_t rotation)
+      {
+        _rotation = rotation;
+      }
+
+    uint8_t rotation()
+      {
+        return _rotation;
+      }
+
+  // protected implementation
+    void md_touch::start(uint8_t rotation, uint16_t background)
+      {
+        _rotation = rotation;
+        _COL_BACK = background;
+        char buf[50];
         // start TFT
-      pinMode(_tft_LED, OUTPUT);
-      digitalWrite(_tft_LED, _LED_ON); // switch on backlight
-      _COL_BACK = background;
-      _pTFT->begin();
-      _pTFT->setRotation(_rotation);
-      _pTFT->fillScreen(MD_GREEN);
-      usleep(200000);
-      _pTFT->fillScreen(_COL_BACK);
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN(" .. md_touch .. start touch");
-            #endif
-      _ptouch->begin();
-      _ptouch->setRotation(_rotation);
-      _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
-      _ptouchev->setDrawMode(false);
-
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN("             .. load calibration .. ");
-            #endif
-      res = loadCalibration();
-      if (res == ISOK)
-        {
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN("             .. load calibration ok ");
-            #endif
- //       }
- //     else
- //       {
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-              SOUTLN("is to be calibrated");
-            #endif
-          res = doCalibration();
-        }
-      return ISOK;
-    }
-
-  bool md_touch::loadCalibration()
-    {
-      uint16_t a,b,c,d;
-      uint8_t  res;
-      bool     new = true;
-      pCal = new calData_t(); // to be deleted after calibration
-      Serial.println(" .. read calib");
-      pConf->init(pConf);
-      if (pConf->exists("/tcalib.dat"))
-        {
-          char buf[50];
-          res = pConf->readFile("/tcalib.dat", 40, buf);
-
-
-        }
-      else if (pConf->exists("/conf.dat"))
-        {
-          char buf[50];
-          res = pConf->readFile("/conf.dat", 40, buf);
-          if (res == ESP_OK)
-            {
-              SOUT(" .. Config found ");
-              SOUTLN(buf);
-              sscanf(&buf[0], "%i %i %i %i", &a, &b, &c, &d);
-              //sscanf(&buf[0], "%i %i %i %i", &(pCal->xmin), &(pCal->ymin), &(pCal->xmax), &(pCal->ymax));
-              pCal->xmin = a; pCal->ymin = b; pCal->xmax = c; pCal->ymax = d;
-            }
+        startTFT();
+        // install status window
+        startStatus();
+        // start touch
+             #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                SOUTLN(" .. md_touch .. start touch");
+              #endif
+        _ptouch->begin();
+        _ptouch->setRotation(_rotation);
+        _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
+        _ptouchev->setDrawMode(false);
+            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                SOUTLN("             .. load calibration .. ");
+              #endif
+        // load and check calibration
+        loadCalibration();
+        switch (_iscal)
+          {
+            case MD_RDY:
+                wrStatus("Kalibrierung gefunden", MD_SEL);
+                sleep(1);
                 #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                    SOUT("     cxmin ");
-                    SOUT(pCal->xmin); SOUT(","); SOUT(pCal->ymin); SOUT(",");
-                    SOUT(pCal->xmax); SOUT(","); SOUTLN(pCal->ymax);
-                    _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
+                    SOUTLN("             .. load calibration ok ");
                   #endif
-        }
-      return res;
-    }
+              break;
+            case MD_SEL:
+                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                    SOUTLN("             .. check and save calib ");
+                  #endif
+              doCalibration();
+              break;
+            default:
+                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                    SOUTLN("             .. is to be calibrated");
+                  #endif
+              doCalibration();
+              break;
+          }
+      }
 
-  bool md_touch::checkCalibration()
-    {
-      bool res = ISERR;
-      if (!pCal) { res = loadCalibration(); }
-    }
+    void md_touch::startTFT()
+      {
+            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                SOUTLN(" .. md_touch .. start tft");
+              #endif
+        pinMode(_ledpin, OUTPUT);
+        digitalWrite(_ledpin, _LED_ON); // switch on backlight
+        _pTFT->begin();
+        _pTFT->setRotation(_rotation);
+        _pTFT->fillScreen(MD_GREEN);
+        usleep(200000);
+        _pTFT->fillScreen(_COL_BACK);
+      }
 
-  bool md_touch::doCalibration()
-    {
-      bool res = ISERR;
-      calData_t rawP, calP;
-      int16_t   xpos = 1;
-      int16_t   ypos = 10;
-      int16_t   xmax, ymax;
-      boolean   tch;
-      int16_t   wx, wy;
-      uint16_t  ww, wh;
-      TS_Point  raw;
-      TS_Point  p;
-      int16_t   butCal[4]  = {70, 160, 70, 30};
-      int16_t   butExit[4] = {145, 160, 55, 30};
-      bool      doExit     = false;
-      char      text[30];
+    void md_touch::startStatus()
+      {
+            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                SOUTLN(" .. md_touch .. start status window");
+              #endif
+        _statbox.setBox(STAT_X, STAT_Y, STAT_W, STAT_H);
+        _statbox.setTextSize(STAT_SIZE);
+        //_statbox.setTextSize(1);
+        _statbox.setOrient(STAT_ORIENT);
+        _statbox.setLen(44);
+        _statbox.setText("Herzlich Willkommen");
+        _statbox.show();
+        sleep(1);
+        _statbox.hide();
+      }
+    void md_touch::loadCalibration()
+      {
+        uint16_t a,b,c,d;
+        uint8_t  res;
+        char buf[60];
+        if (pCal != NULL) { delete pCal; pCal = NULL;}
+        pCal = new calData_t(); // to be deleted after calibration
+        pConf->init(pConf);
+        _iscal = MD_UNDEF;
+        SOUTLN(" .. read /tcalib.dat or /conf.dat");
 
-      if (!pCal) { SOUTLN(" doCal  !!! no cal struct !!!"); res = loadCalibration(); }
+        if (pConf->exists("/tcalib.dat"))
+          {
+            res = pConf->readFile("/tcalib.dat", 40, buf);
+            if (res == ESP_OK)
+              {
+                SOUT(" .. '/tcalib' found "); SOUTLN(buf);
+                sscanf(&buf[0], "%3i %3i %4i %4i", &a, &b, &c, &d);
+                _iscal = MD_RDY;
+              }
+          }
+        else if ((_iscal == MD_UNDEF) && (pConf->exists("/conf.dat")))
+          {
+            res = pConf->readFile("/conf.dat", 40, buf);
+            if (res == ESP_OK)
+              {
+                SOUT(" .. '/conf' found "); SOUTLN(buf);
+                sscanf(&buf[0], "%3i %3i %4i %4i", &a, &b, &c, &d);
+                _iscal = MD_SEL;
+              }
+          }
+        else
+          {
+            _iscal = MD_DEF;
+          }
 
-      _pTFT->setTextSize(1);
-      uint8_t i = _rotation % 4;
-      switch (i) // set max limits
-        {
-          case 0:  xmax = 240; ymax = 320; break;
-          case 1:  xmax = 320; ymax = 240; break;
-          case 2:  xmax = 240; ymax = 320; break;
-          default: xmax = 320; ymax = 240; break;
-        }
-      _pTFT->setRotation(i);
+        if (_iscal > MD_DEF)
+          {
+            pCal->setCalib(a, b, c, d);
+          }
 
-      for ( i = 0; i < 4 ; i++ )  // draw calibrations points
-        {
-          switch (i)
-            {
-              case 0:
-                xpos = 10; //
-                ypos = 10;
-                wx   = 10;
-                wy   = 5;
-                break;
-              case 1:
-                xpos = xmax -10;
-                ypos = 10;
-                wx   = -60;
-                wy   = 5;
-                break;
-              case 2:
-                xpos = 10;
-                ypos = ymax -10;
-                wx   = 10;
-                wy   = -10;
-                break;
-              default:
-                xpos = xmax - 10;
-                ypos = ymax - 10;
-                wx   = -60;
-                wy   = -10;
-                break;
-            }
-          _pTFT->drawRoundRect( xpos, ypos, 3, 3, 1, ILI9341_YELLOW);
-          sprintf(text,"%i / %i", xpos, ypos);
-          xpos += wx;
-          ypos += wy;
-          _pTFT->setCursor(xpos, ypos);
-          _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-          _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-          _pTFT->print(text);
-        }
+              #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                  SOUTLN(pCal->printCal50(buf));
+                #endif
+        _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
+      }
 
-            SOUTLN("draw buttons");
-        _pTFT->setTextSize(2);
-        _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
-        //_pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
-        _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
-        _pTFT->setTextColor(MD_YELLOW);
-        _pTFT->print("Calib");
-        _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
-        //_pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
-        _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
-        _pTFT->setTextColor(MD_BLUE);
-        _pTFT->print("Done");
-      //get position and check if touched
-      while (1)
-        {
-          tch = _ptouchev->getTouchPos(&p, &raw);
-          if (tch)
-            {
-              sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
-              xpos = 25;
-              ypos = 110;
-              if (   (p.x > butExit[0]) && (p.x < butExit[0] + butExit[2])
-                  && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
-                 )
-                {
-                  SOUTLN("Calib done");
-                  doExit = true;
-                  _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
-                  _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
-                }
-              else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
-                       && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
-                      )
-                {
-                      /*
-                        SOUTLN("Rechnung");
-                        SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
-                        SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
-                        SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
-                        SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
-                       */
-                  calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
-                  calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
-                  calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                  calP.ymax = (calP.x0y1.y + calP.x1y1.y)/2;
-                  int16_t dRawX = calP.xmax - calP.xmin;
-                  int16_t dRawY = calP.ymax - calP.ymin;
-                  calP.xmin -= 10 * dRawX / (xmax - 20);
-                  calP.xmax += 10 * dRawX / (xmax - 20);
-                  calP.ymin -= 10 * dRawY / (ymax - 20);
-                  calP.ymax += 10 * dRawY / (ymax - 20);
-                  _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
-                }
-              else if ((raw.x < 1000) && (raw.y < 1000))
-                { ypos = 30;  calP.x0y0 = raw;
-                  SOUT("       "); SOUT(calP.xmin); SOUT("/"); SOUTLN(calP.ymin);
-                }
-              else if ((raw.x > 3000) && (raw.y < 1000))
-                { ypos = 50;  calP.x1y0 = raw; }
-              else if ((raw.x < 1000) && (raw.y > 3000))
-                { ypos = 70;  calP.x0y1 = raw; }
-              else if ((raw.x > 3000) && (raw.y > 3000))
-                { ypos = 90; calP.x1y1 = raw; }
-              else
-                {
-                }
-              _pTFT->setCursor(xpos,ypos);
-              _pTFT->setTextSize(1);
-              _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-              _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-              _pTFT->print(text);
-              usleep(500000);
-            }
-        }
-    }
+    void md_touch::checkCalibration()
+      {
+        if (!pCal) { loadCalibration(); }
+      }
 
-  bool saveCalibration(char* text, size_t len)
-    {
-      ;
-    }
+    void md_touch::doCalibration()
+      {
+        calData_t rawP, calP;
+        int16_t   xpos = 1;
+        int16_t   ypos = 10;
+        int16_t   xmax, ymax;
+        boolean   tch;
+        int16_t   wx, wy;
+        uint16_t  ww, wh;
+        TS_Point  raw;
+        TS_Point  p;
+        int16_t   butCal[4]  = {70,  160, 70, 32};
+        int16_t   butExit[4] = {145, 160, 55, 32};
+        bool      doExit     = false;
+        char      text[60];
+
+        if (!pCal)
+          {
+            SOUTLN(" doCal  !!! no cal struct !!!");
+            loadCalibration();
+          }
+
+        _pTFT->setTextSize(1);
+        uint8_t i = _rotation % 4;
+        switch (i) // set max limits
+          {
+            case 0:  xmax = 240; ymax = 320; break;
+            case 1:  xmax = 320; ymax = 240; break;
+            case 2:  xmax = 240; ymax = 320; break;
+            default: xmax = 320; ymax = 240; break;
+          }
+        _pTFT->setRotation(i);
+
+        for ( i = 0; i < 4 ; i++ )  // draw calibrations points
+          {
+            switch (i)
+              {
+                case 0:
+                  xpos = 10; //
+                  ypos = 10;
+                  wx   = 10;
+                  wy   = 5;
+                  break;
+                case 1:
+                  xpos = xmax -10;
+                  ypos = 10;
+                  wx   = -60;
+                  wy   = 5;
+                  break;
+                case 2:
+                  xpos = 10;
+                  ypos = ymax -10;
+                  wx   = 10;
+                  wy   = -10;
+                  break;
+                default:
+                  xpos = xmax - 10;
+                  ypos = ymax - 10;
+                  wx   = -60;
+                  wy   = -10;
+                  break;
+              }
+            _pTFT->drawRoundRect( xpos, ypos, 3, 3, 1, ILI9341_YELLOW);
+            sprintf(text,"%i / %i", xpos, ypos);
+            xpos += wx;
+            ypos += wy;
+            _pTFT->setCursor(xpos, ypos);
+            _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+            _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+            _pTFT->print(text);
+          }
+
+              SOUTLN("draw buttons");
+          _pTFT->setTextSize(2);
+          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+          //_pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+          _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
+          _pTFT->setTextColor(MD_YELLOW);
+          _pTFT->print("Calib");
+          _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
+          //_pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
+          _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
+          _pTFT->setTextColor(MD_BLUE);
+          _pTFT->print("Done");
+        //get position and check if touched
+        while (1)
+          {
+            tch = _ptouchev->getTouchPos(&p, &raw);
+            if (tch)
+              {
+                sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
+                SOUT(text);
+                xpos = 25;
+                ypos = 110;
+                if (   (p.x > butExit[0]) && (p.x < butExit[0] + butExit[2])
+                    && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
+                   )
+                  {  // exit calibration routine
+                    SOUTLN(" Calib done");
+                    doExit = true;
+                    _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
+                    _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
+                  }
+                else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
+                         && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
+                        )
+                  { // execute calibration and write to file in flash
+                    SOUTLN(" do Calib");
+                        /*
+                          SOUTLN("Rechnung");
+                          SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
+                          SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
+                          SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
+                          SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
+                         */
+                    calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
+                    calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
+                    calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
+                    calP.ymax = (calP.x0y1.y + calP.x1y1.y)/2;
+                    int16_t dRawX = calP.xmax - calP.xmin;
+                    int16_t dRawY = calP.ymax - calP.ymin;
+                    calP.xmin -= 10 * dRawX / (xmax - 20);
+                    calP.xmax += 10 * dRawX / (xmax - 20);
+                    calP.ymin -= 10 * dRawY / (ymax - 20);
+                    calP.ymax += 10 * dRawY / (ymax - 20);
+                    _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
+                    saveCalibration();
+                  }
+                else if ((raw.x < 1000) && (raw.y < 1000))
+                  {  // touched upper left
+                    ypos = 30;
+                        SOUTLN(" P00");
+                    calP.x0y0 = raw;
+                  }
+                else if ((raw.x > 3000) && (raw.y < 1000))
+                  {  // touched upper right
+                    ypos = 50;
+                        SOUTLN(" P10");
+                    calP.x1y0 = raw;
+                  }
+                else if ((raw.x < 1000) && (raw.y > 3000))
+                  {  // touched lower left
+                    ypos = 70;
+                        SOUTLN(" P01");
+                    calP.x0y1 = raw;
+                  }
+                else if ((raw.x > 3000) && (raw.y > 3000))
+                  {  // touched lower right
+                    ypos = 90;
+                        SOUTLN(" P11");
+                    calP.x1y1 = raw;
+                  }
+
+                _pTFT->setCursor(xpos,ypos);
+                _pTFT->setTextSize(1);
+                _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+                _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+                _pTFT->print(text);
+                usleep(500000);
+              }
+          }
+      }
+
+    void md_touch::saveCalibration()
+      {
+        if (pCal != NULL)
+          {
+            if (pConf->exists("/tcalib.dat"))
+              {
+                pConf->remove("/tcalib.dat");
+              }
+            char buf[20];
+            sprintf(buf,"%3i %3i %4i %4i",pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
+            SOUT("new calib file '"); SOUT(buf); SOUTLN("'");
+            pConf->writeFile("/tcalib.dat",buf);
+          }
+        else
+          {
+            wrStatus("ERR pCal not existing");
+          }
+      }
 
 #ifdef NOT_USED
   // --- includes
@@ -966,7 +1136,7 @@
         }
     }
 
-#ifdef PARKEN
+#ifdef PARKENS
 
   TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 

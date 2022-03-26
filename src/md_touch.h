@@ -37,87 +37,263 @@
     #define MD_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
     #define MD_PINK        0xF81F
 
-  // Parameter für Touchscreen
-  #define MINPRESSURE 10 //pressure to detect touch
-  #ifndef TS_MINX
-      #define TS_MINX 230 //minimal x return value
-      #define TS_MINY 350 //minimal y return value
-      #define TS_MAXX 3700  //maximal x return value
-      #define TS_MAXY 3900 //maximal y return value
-    #endif
-        //496 //262 //3997 //3925
+  // parameters for touchscreen
+      #define MINPRESSURE 10 //pressure to detect touch
+    // touchscreen
+      #ifndef TS_MINX
+          #define TS_MINX 230 //minimal x return value
+          #define TS_MINY 350 //minimal y return value
+          #define TS_MAXX 3700  //maximal x return value
+          #define TS_MAXY 3900 //maximal y return value
+        #endif
+            //496 //262 //3997 //3925
 
-    typedef struct calData
-      {
-        uint16_t xmin = TS_MINX;
-        uint16_t xmax = TS_MAXX;
-        uint16_t ymin = TS_MINY;
-        uint16_t ymax = TS_MAXY;
-        TS_Point x0y0 = {10,  10,  0};
-        TS_Point x0y1 = {10,  310, 0};
-        TS_Point x1y0 = {230, 10,  0};
-        TS_Point x1y1 = {230, 310, 0};
-      } calData_t;
+        void    actLev(uint8_t level);
+        uint8_t actLev(void);
+        void    oldLev(uint8_t level);
+        uint8_t oldLev(void);
+        void    actLev(uint8_t level);
+        uint8_t actLev(void);
+        void    oldLev(uint8_t level);
+        uint8_t oldLev(void);
 
-  void    actLev(uint8_t level);
-  uint8_t actLev(void);
-  void    oldLev(uint8_t level);
-  uint8_t oldLev(void);
-  void    actLev(uint8_t level);
-  uint8_t actLev(void);
-  void    oldLev(uint8_t level);
-  uint8_t oldLev(void);
+        /*
+          #ifndef TS_MINX
+              #define TS_MINX 325
+              #define TS_MINY 200
+              #define TS_MAXX 3850
+              #define TS_MAXY 3700
+            #endif
+        */
+
+    // text defines
+      #define TXT_LEFT    0
+      #define TXT_CENTER  1
+      #define TXT_RIGHT   2
+      #define TXT_CHAR1_H 8
+      #define TXT_CHAR1_W 6
+    // colors
+      #define COL_BUT_DEF MD_BLACK
+      #define COL_BUT_SEL MD_PURPLE
+      #define COL_BUT_RDY MD_DARKGREEN
+      #define COL_BUT_EME MD_RED
+      #define COL_TXT_DEF MD_ORANGE
+      #define COL_TXT_SEL MD_GREENYELLOW
+      #define COL_TXT_RDY MD_WHITE
+      #define COL_TXT_EME MD_GREENYELLOW //MD_PURPLE
+      #define COL_BACK    MD_BLACK
+
+    // status window
+      #define STAT_X      4
+      #define STAT_Y      229
+      #define STAT_W      314
+      #define STAT_H      12
+      #define STAT_SIZE   1
+      #define STAT_ORIENT TXT_CENTER
+    // calibration
+      #define CAL_FCONF   "/conf.dat"
+      #define CAL_FCALIB  "/tcalib.dat"
 
   // --- tasks
     //void handleTouch(void * pvParameters);
     //void handleMenu(void * pvParameters);
 
 
-  //--- class md_touch
-    //#define TS_MINX 325
-    //#define TS_MINY 200
-    //#define TS_MAXX 3850
-    //#define TS_MAXY 3700
+  // --- class tColors
+    class tColors
+      {
+        private:
+          uint16_t _cols[4];
 
-    //#define TS_CAL_FILE   "touchcal.dat"
-    //#define TS_CAL_MAXLEN 50
+        public:
+        	tColors(void) {}
+          tColors(uint16_t colDef, uint16_t colSel, uint16_t colRdy, uint16_t colEme)
+                  { _cols[0]=colDef; _cols[1]=colSel; _cols[2]=colRdy; _cols[3]=colEme;}
 
+          void operator=(tColors p)
+                  {_cols[0]=p._cols[0]; _cols[1]=p._cols[1]; _cols[2]=p._cols[2]; _cols[3]=p._cols[3];};
+
+          uint16_t cols ( uint8_t mode = MD_DEF)
+                  { return _cols[mode]; }
+          void col ( uint16_t color, uint8_t mode = MD_DEF)
+                  { _cols[mode] = color; }
+      };
+
+  // --- class tBoxColors
+    class tBoxColors
+      {
+        private:
+          tColors _colbut  = tColors(COL_BUT_DEF, COL_BUT_SEL, COL_BUT_RDY, COL_BUT_EME);
+          tColors _coltxt  = tColors(COL_TXT_DEF, COL_TXT_SEL, COL_TXT_RDY, COL_TXT_EME);
+          uint8_t _colhide = COL_BACK;
+
+        public:
+        	tBoxColors(void) {}
+
+          void     operator=(tBoxColors p) { _colbut=p._colbut; _coltxt=p._coltxt; _colhide=p._colhide;};
+
+          uint16_t colBut ( uint8_t mode = MD_DEF)
+                  { return _colbut.cols(mode); }
+          void     colBut ( uint16_t color, uint8_t mode = MD_DEF)
+                  { _colbut.col(color, mode); }
+          uint16_t colText( uint8_t mode = MD_DEF)
+                  { return _coltxt.cols(mode); }
+          void     colText( uint16_t color, uint8_t mode = MD_DEF)
+                  { _coltxt.col(color, mode); }
+      };
+
+  // --- class tPoint
+    class tPoint
+      {
+        public:
+        	tPoint(void) {}
+        	tPoint(int16_t _x, int16_t _y) { set(_x,_y); }
+
+        	bool operator==(tPoint p)  { return ((p.x == x) && (p.y == y)); }
+        	bool operator!=(tPoint p)  { return ((p.x != x) || (p.y != y)); }
+        	void operator+=(tPoint p)  { x += p.x; y += p.y; }
+        	void operator=(TS_Point p) { x = p.x; y = p.y; }
+
+          void set(int16_t _x, int16_t _y)
+                  { x=_x; y=_y; }
+          virtual char* print15(char* buf)
+                  { sprintf(buf,"x %4i y %4i",x,y); return buf; }
+
+          int16_t x = 0;
+          int16_t y = 0;
+      };
+
+  // --- class tText
+    class tText
+      {
+        protected:
+          char*    _text = NULL;
+          uint16_t _len  = 0;
+          uint8_t  _size = 2;
+          uint8_t  _bpos = TXT_LEFT; // orientation
+
+        public:
+          tText() {}
+          ~tText() { if (_text != NULL) delete _text; }
+
+          void    setText(const char* pTxt);
+          void    setText(String Text);
+          char*   getText(char* pText);
+          void    setLen(uint8_t len)
+                      {_len = len;}
+          void    setTextSize(uint8_t textSize)
+                      {_size = textSize;}
+          uint8_t txtSize()
+                      {return _size;}
+          void    setOrient(uint8_t orient)
+                      {_bpos = orient; }
+      };
+
+  // --- class tBox
+    class tBox
+      {
+        protected:
+          int16_t  _x      = 0;  // position top/left
+          int16_t  _y      = 0;  // position top/left
+          uint16_t _w      = 10;
+          uint16_t _h      = 10;
+
+        public:
+          tBox() {}
+          tBox(int16_t x, int16_t y, uint16_t w, uint16_t h) { setPos(x,y); setSize(w,h); }
+
+          void     setPos (int16_t  x, int16_t  y) { _x=x; _y=y; }
+          void     setSize(uint16_t w, uint16_t h) { _w=w; _h=h; }
+          int16_t  x() { return _x; }
+          int16_t  y() { return _y; }
+          uint16_t w() { return _w; }
+          uint16_t h() { return _h; }
+
+          char*    printbox(char* p)
+                           { sprintf(p, "%3i %3i %3i %3i",_x,_y,_w,_h); return p; }
+
+          void operator=(tBox p) { _x=p.x(); _y=p.y(); _w=p.w(); _h=p.h(); };
+
+      };
+
+  // --- class tButton
+    class tButton : public tBox, public tBoxColors, public tText
+      {
+        protected:
+          uint8_t    _mode = MD_DEF;
+          tBoxColors _cols;
+
+        public:
+          tButton() { }
+          tButton(int16_t x, int16_t y, uint16_t w, uint16_t h) { }
+
+          void show();
+          void show(uint8_t mode)
+                   { _mode = mode; show(); }
+          void hide();
+          void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+                   { setPos(x,y); setSize(w,h); }
+          //void setText();
+      };
+
+  // --- class calData
+    class calData_t
+      {
+        public:
+          uint16_t xmin = 230 ;
+          uint16_t ymin = 350 ;
+          uint16_t xmax = 3700;
+          uint16_t ymax = 3900;
+          tPoint   x0y0 = {10,  10};
+          tPoint   x0y1 = {10,  310};
+          tPoint   x1y0 = {230, 10};
+          tPoint   x1y1 = {230, 310};
+
+          void setCalib(uint16_t _xmin, uint16_t _ymin, uint16_t _xmax,uint16_t _ymax)
+                        { xmin = _xmin; ymin = _ymin, xmax = _xmax, ymax = _ymax; }
+          virtual char* printPts56(char* pcalData)
+                        { sprintf( pcalData, "points P00 %3i %3i P01 %3i %3i P10 %3i %3i P11 %3i %3i",
+                                   x0y0.x, x0y0.y, x0y1.x, x0y1.y, x1y0.x, x1y0.y, x1y1.x, x1y1.y);
+                          return pcalData; }
+          char* printCal50(char* pcalVals)
+                        { sprintf( pcalVals, "calPos xmin %4i ymin %4i xmax %4i ymax %4i",
+                                   xmin, ymin, xmax, ymax);
+                          return pcalVals; }
+      };
+
+
+  // --- class md_touch
     class md_touch
      //public Adafruit_ILI9341, public XPT2046_Touchscreen,
       {
+        private:
+          int8_t   _iscal    = MD_UNDEF;
+          uint8_t  _ledpin   = 0;
+          uint8_t  _LED_ON   = 1;
+          tButton  _statbox;
+
         public:
         	md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
                                                   uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
           ~md_touch();
 
-          bool    start(uint8_t rotation, uint16_t background = MD_BLACK);
-            // calibration
-          bool    loadCalibration();
-          bool    doCalibration();
-          bool    checkCalibration();
-          bool    saveCalibration(char* text, size_t len);
-            // properties
-          void    rotation(uint8_t _rotatio) { _rotation = _rotatio; }
-          uint8_t rotation()                 { return _rotation; }
-          //bool isTouched();
-          //TS_Point getPoint();
-
+          void    start(uint8_t rotation, uint16_t background = MD_BLACK);
+          void    wrStatus   (const char* msg, uint8_t mode = MD_DEF);
+          void    wrStatus   (String msg, uint8_t mode = MD_DEF);
+          void    setRotation(uint8_t rotation);
+          uint8_t rotation();
 
         private:
-          uint8_t  _rotation = 1;
-          uint8_t  _tft_LED  = 0;
-          uint8_t  _LED_ON   = 1;
-          uint16_t _COL_BACK = MD_BLACK;
-
-
-
-          //long    _lastStateChange = 0;
-          //long    _lastTouched = 0;
-
-          //uint8_t _tirqPin  = 255;
+          void startTFT();
+          void startStatus();
+            // calibration
+          void loadCalibration();
+          void doCalibration();
+          void checkCalibration();
+          void saveCalibration();
       };
-
-#endif
+  // --- class
+  #endif
 
 #ifdef PARKEN
     //--- class md_menu
