@@ -1,17 +1,103 @@
+// --- includes
   #include <md_touch.h>
   #include <md_spiffs.h>
   #include <string>
   #include <ArialRounded.h>
   #include <md_defines.h>
 
-    static XPT2046_Touchscreen *_ptouch   = NULL;
-    static Adafruit_ILI9341    *_pTFT     = NULL;
-    static md_touch            *_pmdtouch = NULL;
-    static md_TouchEvent       *_ptouchev = NULL;
-    static md_spiffs           *pConf     = new md_spiffs();
-    static calData_t           *pCal      = NULL;
-    static uint8_t             _rotation  = 3;
-    static uint16_t            _COL_BACK  = MD_BLACK;
+// --- globals
+  static XPT2046_Touchscreen *_ptouch   = NULL;
+  static Adafruit_ILI9341    *_pTFT     = NULL;
+  static md_touch            *_pmdtouch = NULL;
+  static md_TouchEvent       *_ptouchev = NULL;
+  static md_spiffs           *pConf     = new md_spiffs();
+  static calData_t           *pCal      = NULL;
+  static int8_t              _rotation  = 3;
+  static uint16_t            _COL_BACK  = MD_BLACK;
+  static TaskHandle_t        _touchTask = NULL;
+  // atomic communication with touch task
+    // task wr    / extern rd
+      static uint32_t        _tactRaw   = 0;    // last touched point (raw type)
+      static uint32_t        _tactXY    = 0;    // last touched point (TFT converted)
+    // task rd+wr / extern rd+wr  =  handshake
+      static int8_t          _tCtrl     = TTASK_ON_RUN;    // ext  TTASK_ON_RUN:  handshake off
+                                                           // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
+                                                           // ext  TTASK_ON_HOLD: touch on hold
+                                                           // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
+    // extern wr  / task rd
+      static uint32_t        _tWait_us  = 66000; // task time tick (minimum = 1000 ~ 1 msec)
+
+
+  //static TaskHandle_t menuTask_  = NULL;
+
+// task touchTask
+  void handleTouch(void * pvParameters)
+    {
+      boolean   tch;
+      TS_Point  raw;
+      TS_Point  p;
+      unsigned long lastWD, actWD, diff;
+
+      esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
+      esp_task_wdt_add(NULL); //add current thread to WDT watch
+      lastWD = millis();
+      //uint32_t count = 0;
+
+      while(true)  // endless loop
+        {
+          actWD = millis();
+          diff  = actWD - lastWD;
+          if (diff > 1000)
+            {
+              lastWD = actWD;
+              esp_task_wdt_reset();
+              //SOUT("cycle "); SOUT((uint32_t) actWD*1000/count); SOUT(" "); SOUTLN(count);
+              //count = 0;
+            }
+          if (_tCtrl < TTASK_ON_HOLD)
+            {
+              tch = _ptouchev->getTouchPos(&p, &raw);
+              if (tch)
+                {
+                  if (raw.x < 0) raw.x = 0;
+                  if (raw.y < 0) raw.y = 0;
+                  if (p.x < 0) p.x = 0;
+                  if (p.y < 0) p.y = 0;
+                  _tactRaw = (raw.x << 16) + raw.y;
+                  _tactXY  = (p.x << 16) + p.y;
+                  SOUT("ttask "); SOUT(p.x); SOUT("/"); SOUT(p.y); SOUT(" "); SOUTHEXLN(_tactXY);
+                }
+            }
+          //count++;
+        }
+               /*if (pts_->isTouching())
+                  {
+                    SOUTLN("screen touched ");
+                    pts_->getPosition(x, y);
+                    SOUT("position x"); SOUT(x); SOUT(", y "); SOUTLN(y);
+                      //delay(30);
+                      //pts->readData(&x, &y, &z);
+                      //SOUT("x, y, z "); SOUT(x); SOUT(", "); SOUT(y); SOUT(", "); SOUTLN(z);
+                    //pts->isrWake = false;
+                  }
+                 */
+      usleep(_tWait_us);
+    }
+
+    void startTouchTask()
+      {
+        xTaskCreatePinnedToCore(
+                            handleTouch,           /* Task function. */
+                            "touchTask",           /* name of task. */
+                            10000,                 /* Stack size of task */
+                            NULL,                  /* parameter of the task */
+                            4 | portPRIVILEGE_BIT, /* priority of the task */
+                            &_touchTask,            /* Task handle to keep track of created task */
+                            0              );      /* pin task to core 0 */
+        SOUTLN("touchTask started on core 0");
+      }
+
+// task menuTask
 
 // --- class tColors
 // --- class tBoxColors
@@ -170,6 +256,7 @@
               doCalibration();
               break;
           }
+        startTouchTask();
       }
 
     void md_touch::startTFT()
@@ -444,10 +531,6 @@
     #include <md_defines.h>
 
   // --- globals
-    md_touch*    pmdt_      = NULL;
-    mdGrafx*     pgfx_      = NULL;
-    md_menu*     menu_      = NULL;
-
     TaskHandle_t touchTask_ = NULL;
     TaskHandle_t menuTask_  = NULL;
 
@@ -604,360 +687,6 @@
           pmdt_->saveCalibration(buf, sizeof(buf));
         }
     */
-  // ----------------------------------------------------------------
-  // --- class md_touch
-  	md_touch::md_touch(uint8_t cspin, uint8_t tirq) //, uint8_t spi_bus)
-      {
-        //pts_ = new XPT2046_Touchscreen(cspin, tirq);
-        pmdt_  = this;
-        tcs_   = cspin;
-        tirq_  = tirq;
-        //_pSPI  = p;
-        //pts_  = new mdXPT2046(tcs_, tirq_, spi_bus);
-      }
-
-    md_touch::~md_touch()
-      {
-        //pts_ = NULL;
-      }
-
-    void md_touch::init(Adafruit_ILI9341* ptft, uint8_t rotation)
-      {
-        pgfx_ = pgfx;
-        _rotation = rotation;
-        //pts_->begin(240, 320);
-        //if(1)
-        if (!loadCalibration())
-          {
-            SOUT("Calibration necessary rot "); SOUTLN(_rotation);
-            calibrate();
-          }
-          else
-          {
-            SOUTLN("Calibration data found");
-          }
-        // check if spiffs is present with calibration data
-          //pts_  = new XPT2046_Calibrated(_csPin);
-          //pts_  = new XPT2046_Touchscreen(_csPin);
-          //pts   = new XPT2046_Touchscreen(_csPin, _tirqPin);
-        startTouchTask();
-      }
-
-    bool md_touch::loadCalibration()
-      {
-        // always use this to "mount" the filesystem
-        //      SOUTLN("loadCalibration SPIFFS ...");
-          //      bool result = SPIFFS.begin();
-          //      SOUTLN("SPIFFS is init");
-          //
-          //      SOUT("SPIFFS opened: ");
-          //      SOUTLN(result ? "OK" : "Failed");
-          //      // this opens the file in read-mode
-          //      if (!SPIFFS.exists("/calibration.txt"))
-          //        {
-          //          SOUTLN("calibration.txt not present");
-          //          return false;
-          //        }
-          //      File f = SPIFFS.open("/calibration.txt", "r");
-          //      SOUT("filename "); SOUTLN(f.name());
-          //      if (f)
-          //        {
-          //          //Lets read line by line from the file
-          //          char tmp[9];
-          //          tmp[8] = 0;
-          //          calParams_t cal;
-          //
-          //          SOUTLN("load cal params ");
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("dx  '"); SOUT(tmp); SOUT("' ");
-          //          cal.dx = atoi(tmp);
-          //          SOUTLN(cal.dx);
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("dy  '"); SOUT(tmp); SOUT("' ");
-          //          cal.dy = atoi(tmp);
-          //          SOUTLN(cal.dy);
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("vi1 '"); SOUT(tmp); SOUT("' ");
-          //          cal.vi1 = atoi(tmp);
-          //          SOUTLN(cal.vi1);
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("vj1 '"); SOUT(tmp); SOUT("' ");
-          //          cal.vj1 = atoi(tmp);
-          //          SOUTLN(cal.vj1);
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("dvi  '"); SOUT(tmp); SOUT("' ");
-          //          cal.dvi = atoi(tmp);
-          //          SOUTLN(cal.dvi);
-          //          f.readBytesUntil('\n', tmp, 8);
-          //          SOUT("dvj  '"); SOUT(tmp); SOUT("' ");
-          //          cal.dvj = atoi(tmp);
-          //          SOUTLN(cal.dvj);
-          //          //String dxStr  = tmp;
-          //          /*
-          //            String dxStr  = f.readString();
-          //            String dyStr  = f.readString(); //  readStringUntil(';');
-          //            String dviStr = f.readString(); //  readStringUntil(';');
-          //            String dvjStr = f.readString(); //  readStringUntil(';');
-          //            String vi1Str = f.readString(); //  readStringUntil(';');
-          //            String vj1Str = f.readString(); //  readStringUntil(';');
-          //              SOUT("cal params '"); SOUT(dxStr);
-          //              SOUT("' '"); SOUT(dyStr);
-          //              SOUT("' '"); SOUT(dviStr);
-          //              SOUT("' '"); SOUT(dvjStr);
-          //              SOUT("' '"); SOUT(vi1Str);
-          //              SOUT("' '"); SOUT(vj1Str);
-          //            int32_t cal_dx  = dxStr.toInt();
-          //            int32_t cal_dy  = dyStr.toInt();
-          //            int32_t cal_dvi = dviStr.toInt();
-          //            int32_t cal_dvj = dvjStr.toInt();
-          //            int32_t cal_vi1 = vi1Str.toInt();
-          //            int32_t cal_vj1 = vj1Str.toInt();
-          //              SOUT("' int "); SOUT(cal_dx);
-          //              SOUT(" "); SOUT(cal_dy);
-          //              SOUT(" "); SOUT(cal_dvi);
-          //              SOUT(" "); SOUT(cal_dvj);
-          //              SOUT(" "); SOUT(cal_vi1);
-          //              SOUT(" "); SOUTLN(cal_vj1);
-          //            if (!cal_dx)  return false;
-          //            if (!cal_dy)  return false;
-          //            if (!cal_dvi) return false;
-          //            if (!cal_dvj) return false;
-          //            if (!cal_vi1) return false;
-          //            if (!cal_vj1) return false;
-          //            */
-          //          f.close();
-          //          pts_->setCalibration(&cal);
-          //        }
-        return true;
-      }
-
-  /*void md_touch::calibratePoint(uint16_t x, uint16_t y, uint16_t &vi, uint16_t &vj)
-    {
-      SOUT(" calibratePoint "); SOUTHEXLN((uint32_t) pgfx_);
-      // Draw cross
-        pgfx_->fillBuffer(MD4_BLACK);
-        pgfx_->commit();
-        pgfx_->setColor(MD4_YELLOW);
-        pgfx_->drawLine(x - 8, y, x + 8, y);
-        pgfx_->drawLine(x, y - 8, x, y + 8);
-        pgfx_->commit();
-
-      SOUT("wait for touching ... ");
-      while (!pts_->isTouching())
-        { usleep(100000); }
-      SOUT("touching ... ");
-      pts_->getRaw(vi, vj);
-      //pgfx_->drawRect(x - 8, y - 8, 17, 17);
-      while (pts_->isTouching())
-        { usleep(1000); }
-      SOUTLN(" touch released");
-    }
-  */
-  void md_touch::calibrate()
-    {
-      //uint16_t x1, y1, x2, y2, x3, y3, x4, y4;
-      //uint16_t vi1, vj1, vi2, vj2, vi3, vj3, vi4, vj4;
-      ////uint8_t  isok = false;
-      //calParams_t cal;
-      //char buf[80];
-      //
-      //SOUTLN("Start calibration ...");
-      //pts_->getCalibrationPoints(x1, y1, x2, y2);
-      //SOUT("cal point "); SOUT(x1); SOUT(" "); SOUTLN(y1);
-      //calibratePoint(x1, y1, vi1, vj1);
-      //SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(vi1); SOUT(" "); SOUTLN(vj1);
-      ////calibratePoint(x1, y1, cal.vi1, cal.vj1);
-      ////SOUT("cal p(1) "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(cal.vi1); SOUT(" "); SOUTLN(cal.vj1);
-      //sleep(1);
-      ////usleep(50000);
-      ////calibratePoint(x2, y2, cal.dvi, cal.dvj);
-      ////SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(cal.dvi); SOUT(" "); SOUTLN(cal.dvj);
-      //SOUT("cal point "); SOUT(x2); SOUT(" "); SOUTLN(y2);
-      //calibratePoint(x2, y2, vi2, vj2);
-      //SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(vi2); SOUT(" "); SOUTLN(vj2);
-      //sleep(1);
-      //SOUT("cal point "); SOUT(x3); SOUT(" "); SOUTLN(y3);
-      //x3 = 20;  y3 = 300;
-      //x4 = 220; y4 = 20;
-      //calibratePoint(x3, y3, vi3, vj3);
-      //SOUT("cal p(3) "); SOUT(x3); SOUT(" "); SOUT(y3); SOUT(" "); SOUT(vi3); SOUT(" "); SOUTLN(vj3);
-      //sleep(1);
-      //SOUT("cal point "); SOUT(x4); SOUT(" "); SOUTLN(y4);
-      //calibratePoint(x4, y4, vi4, vj4);
-      //SOUT("cal p(4) "); SOUT(x4); SOUT(" "); SOUT(y4); SOUT(" "); SOUT(vi4); SOUT(" "); SOUTLN(vj4);
-      //
-      //
-      //cal.dx = x2 - x1;
-      //cal.dy = y2 - y1;
-      //cal.vi1 = vi1;
-      //cal.vj1 = vj1;
-      //cal.dvi -= cal.vi1;
-      //cal.dvj -= cal.vj1;
-      //
-      //
-      //pts_->setCalibration(&cal);
-      //// show result on touch
-      //  snprintf(buf, sizeof(buf), "%u %u %u %u %u %u",      cal.dx,  cal.dy,
-      //                             cal.vi1, cal.vj1, cal.dvi, cal.dvj);
-      //  pgfx_->fillBuffer(MD4_BLACK);
-      //  pgfx_->setFont(ArialRoundedMTBold_14);
-      //  pgfx_->setColor(MD4_YELLOW);
-      //  pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
-      //  pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
-      //  pgfx_->commit();
-      //
-      //snprintf(buf, sizeof(buf), "%u\n%u\n%u\n%u\n%u\n%u\n",      cal.dx,  cal.dy,
-      //                           cal.vi1, cal.vj1, cal.dvi, cal.dvj);
-      //SOUT("cal "); SOUT(buf); SOUT(" "); SOUTLN(sizeof(buf));
-      //saveCalibration(buf, sizeof(buf));
-    }
-
-    bool md_touch::saveCalibration(char* text, size_t len)
-      {
-        bool result = SPIFFS.begin();
-      //  if (result)
-      //    {
-      //      File f = SPIFFS.open("/calibration.txt", "w");
-      //      if (!f)
-      //        {
-      //          SOUTLN("file creation failed");
-      //          result = false;
-      //        }
-      //      else
-      //        {
-      //          f.close();
-      //          SPIFFS.remove("/calibration.txt");
-      //          f = SPIFFS.open("/calibration.txt", "w");
-      //          f.write((uint8_t*) text, len);
-      //          SOUT("file '"); SOUT(text); SOUT("' ("); SOUT(len);SOUTLN(") saved");
-      //          f.flush();
-      //          f.close();
-      //        }
-      //    }
-        return result;
-      }
-
-    bool md_touch::loadCalibration()
-      {
-        // always use this to "mount" the filesystem
-        bool result = SPIFFS.begin();
-        Serial.print("SPIFFS opened: ");
-        Serial.println(result ? "OK" : "Failed");
-
-        // this opens the file in read-mode
-        File f = SPIFFS.open("/calibration.txt", "r");
-
-        if (!f)
-          { return false; }
-          else
-          {
-            //Lets read line by line from the file
-            String dxStr = f.readStringUntil('\n');
-            String dyStr = f.readStringUntil('\n');
-            String axStr = f.readStringUntil('\n');
-            String ayStr = f.readStringUntil('\n');
-
-            dx = dxStr.toFloat();
-            dy = dyStr.toFloat();
-            ax = axStr.toInt();
-            ay = ayStr.toInt();
-          }
-        f.close();
-        return true;
-      }
-
-    bool md_touch::saveCalibration()
-      {
-        bool result = SPIFFS.begin();
-
-        // open the file in write mode
-        File f = SPIFFS.open("/calibration.txt", "w");
-        if (!f)
-          {
-            Serial.println("file creation failed");
-            return false;
-          }
-        // now write two lines in key/value style with  end-of-line characters
-        f.println(dx);
-        f.println(dy);
-        f.println(ax);
-        f.println(ay);
-
-        f.close();
-
-        return true;
-      }
-
-    void md_touch::doCalibration()
-      {
-        state = 0;
-        this->calibrationCallback = calibrationCallback;
-      }
-    #ifdef XXXX
-      bool md_touch::isTouched()
-        {
-          return pts_->touched();
-        }
-
-      void md_touch::continueCalibration()
-        {
-          TS_Point p = pts_->getPoint();
-          if (state == 0)
-            {
-              (*calibrationCallback)(10, 10);
-              if (pts_->touched())
-                {
-                  p1 = p;
-                  state++;
-                  lastStateChange = millis();
-                }
-            }
-          else if (state == 1)
-            {
-              (*calibrationCallback)(230, 310);
-              if (pts_->touched() && (millis() - lastStateChange > 1000))
-                {
-
-                  p2 = p;
-                  state++;
-                  lastStateChange = millis();
-                  dx = 240.0 / abs(p1.y - p2.y);
-                  dy = 320.0 / abs(p1.x - p2.x);
-                  ax = p1.y < p2.y ? p1.y : p2.y;
-                  ay = p1.x < p2.x ? p1.x : p2.x;
-                }
-            }
-          }
-      bool md_touch::isCalibrationFinished()
-        {
-          return state == 2;
-        }
-
-      bool md_touch::isTouched(int16_t debounceMillis)
-        {
-          if (pts_->touched() && millis() - lastTouched > debounceMillis)
-            {
-              lastTouched = millis();
-              return true;
-            }
-          return false;
-        }
-
-      TS_Point md_touch::getPoint()
-        {
-          TS_Point p = pts_->getPoint();
-          /*
-          int x = (p.y - ax) * dx;
-          int y = 320 - (p.x - ay) * dy;
-          p.x = x;
-          p.y = y;
-          */
-          p.x = map(p.x, TS_MINX, TS_MAXX, 0, 320);
-          p.y = map(p.y, TS_MINY, TS_MAXY, 240, 0);
-
-          return p;
-        }
-    #endif
   // ----------------------------------------------------------------
   // --- class md_menu
     md_menu::md_menu()  {}
