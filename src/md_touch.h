@@ -46,10 +46,10 @@
 // touchscreen
 
 #ifndef TS_MINX
-#define TS_MINX 230  // minimal x return value
-#define TS_MINY 350  // minimal y return value
-#define TS_MAXX 3700 // maximal x return value
-#define TS_MAXY 3900 // maximal y return value
+  #define TS_MINX 230  // minimal x return value
+  #define TS_MINY 350  // minimal y return value
+  #define TS_MAXX 3700 // maximal x return value
+  #define TS_MAXY 3900 // maximal y return value
 #endif
 // 496 //262 //3997 //3925
 
@@ -106,14 +106,16 @@ uint8_t oldLev(void);
 #define MEN_COL_W 31
 #define MEN_TITLE_X MENU_COL_W * 2 + MENU_COL1_X
 #define MEN_TITLE_W MENU_COL_W * 5 + MENU_BUT_SIZE + MENU_TITLE_X
-#define MEN_MENU_X MENU_COL_W * 5 + MENU_COL1_X
+#define MEN_MENU_X  MENU_COL_W * 5 + MENU_COL1_X
+#define MEN_MENU_W  MENU_COL_W * 3 + MENU_BUT_SIZE
 // row positions
 #define MEN_BUT1_Y 10
 #define MEN_BUTROW_H 30
 #define MEN_TITLE_Y 2
 #define MEN_TITLE_H MENU_BUTROW_H + MENU_BUT1_Y - MEN_TITLE_Y
 #define MEN_MENU1_Y MENU_BUTROW_H + MENU_BUT1_Y
-#define MEN_OUT1_Y MENU_BUTROW_H + MENU_BUT1_Y
+#define MEN_MENU_H  MEN_BUT_SIZE
+#define MEN_OUT1_Y  MENU_BUTROW_H + MENU_BUT1_Y
 #define MEN_OUT_H MEN_BUT_SIZE
 
 // --- tasks
@@ -286,6 +288,13 @@ void handleTouch(void *pvParameters);
           setSize(w, h);
         }
 
+      void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+        {
+          _x = x;
+          _y = y;
+          _w = w;
+          _h = h;
+        }
       void setPos(int16_t x, int16_t y)
         {
           _x = x;
@@ -317,90 +326,98 @@ void handleTouch(void *pvParameters);
     };
 
 // --- class tButton_def
-/* tButtondef is an atomic bit coded value and
- * contains all information for navigation and evaluation
- * Bits:
- *   31-28 screen column
- *         col 1,2   witches for output (20), output (140)
- *         col 3     titel (130 size 2/3)
- *         col 5     main screen, menu
- *         col 9,10  menu control buttons
- *   27-24 screen line in main menu level 3
- *   23-20 screen line in main menu level 2
- *   19-16 screen line in main menu level 1
- *   15-12 screen line in main menu level 0
- *   11- 4 reserved
- *    3- 0 menu status bits
- *          3 reserved
- *          2 maybe selected (used by handleMenu)
- *          1 visible,
- *          0 active for touching (only if visible)
- */
+  /* tButtondef is an atomic bit coded value and
+   * contains all information for navigation and evaluation
+   * Bits:
+   *   31-28 screen column
+   *         col 1,2   witches for output (20), output (140)
+   *         col 3     titel (130 size 2/3)
+   *         col 5     main screen, menu
+   *         col 9,10  menu control buttons
+   *   27-24 screen line in main menu level 3
+   *   23-20 screen line in main menu level 2
+   *   19-16 screen line in main menu level 1
+   *   15-12 screen line in main menu level 0
+   *   11- 4 reserved
+   *    3- 0 menu status bits
+   *          3 reserved
+   *          2 maybe selected (used by handleMenu)
+   *          1 visible,
+   *          0 active for touching (only if visible)
+   */
   class tButton_def // 0b cccc LLLL UUUU llll uuuu .... .... ..va
     {
-    protected:
-      uint32_t _id = 0;
+      protected:
+        uint32_t _id = 0;
 
-    public:
-      tButton_def() {}
-      ~tButton_def() {}
+      public:
+        tButton_def() {}
+        ~tButton_def() {}
 
-      void setID(uint32_t id)
-      {
-        _id = id;
-      }
-      void setAct(uint8_t active) //  can be touched
-      {
-        _id |= (_id & 0xFFFFFFFE) | (active & 0x00000001);
-      }
-      void setVis(uint8_t visible) // is visible
-      {
-        _id |= (_id & 0xFFFFFFFD) | (visible & 0x00000002);
-      }
-      void setCol(uint8_t column) //  column of screen
-      {
-        _id |= (_id & 0x0FFFFFFF) | (column & 0xF0000000);
-      }
-      void setMenu(uint8_t menu) //  column of screen
-      {
-        _id |= (_id & 0xF0000FFF) | (menu & 0x0FFFF000);
-      }
-      uint32_t id()
-      {
-        return _id;
-      }
-      uint8_t isAct()
-      {
-        return (uint8_t)_id & 0x00000001;
-      }
-      uint8_t isVis()
-      {
-        return (uint8_t)_id & 0x00000002;
-      }
-      uint8_t col()
-      {
-        return (uint8_t)((_id & 0xF0000000) >> 28);
-      }
-      uint8_t m0()
-      {
-        return (uint8_t)((_id & 0x0F000000) >> 24);
-      }
-      uint8_t m1()
-      {
-        return (uint8_t)((_id & 0x00F00000) >> 20);
-      }
-      uint8_t m2()
-      {
-        return (uint8_t)((_id & 0x000F0000) >> 16);
-      }
-      uint8_t m3()
-      {
-        return (uint8_t)((_id & 0x0000F000) >> 12);
-      }
-      uint16_t menu()
-      {
-        return (uint16_t)((_id & 0x0FFFF000) >> 12);
-      }
+        void setID(uint32_t id)
+          {
+            _id = id;
+          }
+        void setAct(uint8_t active) //  can be touched
+          {
+            if (active) { _id |= 0x00000001; }
+            else        { _id &= 0xFFFFFFFE; }
+          }
+        void setVis(uint8_t visible) // is visible
+          {
+            if (visible) { _id |= 0x00000002; }
+            else         { _id &= 0xFFFFFFFD; }
+          }
+        void setCol(uint8_t column) //  column of screen
+          {
+            _id |= (_id & 0x0FFFFFFF) | (column & 0xF0000000);
+          }
+        void setMenu(uint16_t menuhex) // menu position - menu 0 = main menu
+          {
+            _id |= (_id & 0xF0000FFF) | (menuhex << 12);
+          }
+        void setMenu(uint8_t menu0, uint8_t menu1,uint8_t menu2,uint8_t menu3) // menu position - menu 0 = main menu
+          {
+            setMenu(  ((menu3 % 16) << 12) + ((menu2 % 16) << 8)
+                    + ((menu1 % 16) << 4)  +  (menu0 % 16)
+                   );
+          }
+        uint32_t id()
+          {
+            return _id;
+          }
+        uint8_t isAct()
+          {
+            return (uint8_t)_id & 0x00000001;
+          }
+        uint8_t isVis()
+          {
+            return (uint8_t)_id & 0x00000002;
+          }
+        uint8_t col()
+          {
+            return (uint8_t)((_id & 0xF0000000) >> 28);
+          }
+        uint8_t m0()
+          {
+            return (uint8_t)((_id & 0x0F000000) >> 24);
+          }
+        uint8_t m1()
+          {
+            return (uint8_t)((_id & 0x00F00000) >> 20);
+          }
+        uint8_t m2()
+          {
+            return (uint8_t)((_id & 0x000F0000) >> 16);
+          }
+        uint8_t m3()
+          {
+            return (uint8_t)((_id & 0x0000F000) >> 12);
+          }
+        uint16_t menu()
+          {
+            return (uint16_t)((_id & 0x0FFFF000) >> 12);
+          }
     };
 
 // --- class tButton
@@ -421,12 +438,27 @@ void handleTouch(void *pvParameters);
             show();
           }
         void hide();
-        void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+
+        void defPos(int16_t x, int16_t y, uint16_t w, uint16_t h)
           {
             setPos(x, y);
             setSize(w, h);
           }
-        // void setText();
+
+        void setup(uint16_t menuhex, uint8_t col )
+          {
+            uint8_t row = menuhex % 4;
+
+          }
+        // tButton_def: void setMenu(uint8_t menu0, uint8_t menu1,uint8_t menu2,uint8_t menu3) // menu position - menu 0 = main menu
+        // tButton_def: void setMenu(uint16_t hexmenu ) // 0x3210
+        // tText:       void setText(const char *pTxt);
+        // tText:       void setText(String Text);
+        // tButton_def: void setID(uint32_t id)
+        // tButton_def: void setAct(uint8_t active) //  can be touched
+        // tButton_def: void setVis(uint8_t visible) // is visible
+        // tButton_def: void setCol(uint8_t column) //  column of screen
+
     };
 
 // --- class calData
@@ -465,7 +497,7 @@ void handleTouch(void *pvParameters);
   class md_touch    // public Adafruit_ILI9341, public XPT2046_Touchscreen,
     {
       private:
-        int8_t _iscal = MD_UNDEF;
+        int8_t  _iscal = MD_UNDEF;
         uint8_t _ledpin = 0;
         uint8_t _LED_ON = 1;
         tButton _statbox;
@@ -475,9 +507,11 @@ void handleTouch(void *pvParameters);
                  uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
         ~md_touch();
 
-        void start(uint8_t rotation, uint16_t background = MD_BLACK);
-        void wrStatus(const char *msg, uint8_t mode = MD_DEF);
-        void wrStatus(String msg, uint8_t mode = MD_DEF);
+        void start      (uint8_t rotation, uint16_t background = MD_BLACK);
+        void wrStatus   (const char *msg, uint8_t mode = MD_DEF);
+        void wrStatus   (String msg, uint8_t mode = MD_DEF);
+        void wrText     (const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
+        void wrText     (String msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
         void setRotation(uint8_t rotation);
         uint8_t rotation();
 
@@ -494,7 +528,7 @@ void handleTouch(void *pvParameters);
   class tList : public md_list
     {
       private:
-        uint8_t _iscal = false;
+        uint8_t  _iscal = false;
         uint32_t _actid = 0;
 
       public:

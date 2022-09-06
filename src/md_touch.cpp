@@ -1,3 +1,4 @@
+#ifndef NOTREADY
 // --- includes
   #include <md_touch.h>
   #include <md_spiffs.h>
@@ -15,6 +16,7 @@
   static int8_t              _rotation  = 3;
   static uint16_t            _COL_BACK  = MD_BLACK;
   static TaskHandle_t        _touchTask = NULL;
+  //static
   // atomic communication with touch task
     // task wr    / extern rd
       static uint32_t        _tactRaw   = 0;    // last touched point (raw type)
@@ -169,6 +171,7 @@
   void tButton::hide()
     {
       _pTFT->fillRoundRect(_x, _y, _w, _h, 2, _COL_BACK);
+      this->setVis(false);
     }
 
 // --- class calData
@@ -201,12 +204,22 @@
       {
       }
 
-    void    setRotation(uint8_t rotation)
+    void md_touch::wrText(const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len)
+      {
+
+      }
+
+    void md_touch::wrText(String msg, uint8_t spalte, uint8_t zeile, uint8_t len)
+      {
+
+      }
+
+    void md_touch::setRotation(uint8_t rotation)
       {
         _rotation = rotation;
       }
 
-    uint8_t rotation()
+    uint8_t md_touch::rotation()
       {
         return _rotation;
       }
@@ -1227,3 +1240,4 @@
   //
   #endif
   #endif
+  #endif // NOTREADY
