@@ -16,7 +16,8 @@
   static int8_t              _rotation  = 3;
   static uint16_t            _COL_BACK  = MD_BLACK;
   static TaskHandle_t        _touchTask = NULL;
-  //static
+  static uint32_t            _hTcount   = 0;
+
   // atomic communication with touch task
     // task wr    / extern rd
       static uint32_t        _tactRaw   = 0;    // last touched point (raw type)
@@ -27,23 +28,22 @@
                                                            // ext  TTASK_ON_HOLD: touch on hold
                                                            // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
     // extern wr  / task rd
-      static uint32_t        _tWait_us  = 66000; // task time tick (minimum = 1000 ~ 1 msec)
+      static uint32_t        _tWait_us  = 10000; // task time tick (minimum = 1000 ~ 1 msec)
 
 
   //static TaskHandle_t menuTask_  = NULL;
 
 // task touchTask
-  void handleTouch(void * pvParameters)
+  void IRAM_ATTR handleTouch(void * pvParameters)
     {
       boolean   tch;
       TS_Point  raw;
       TS_Point  p;
       unsigned long lastWD, actWD, diff;
 
-      esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
-      esp_task_wdt_add(NULL); //add current thread to WDT watch
+      //esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
+      //esp_task_wdt_add(NULL); //add current thread to WDT watch
       lastWD = millis();
-      //uint32_t count = 0;
 
       while(true)  // endless loop
         {
@@ -52,25 +52,36 @@
           if (diff > 1000)
             {
               lastWD = actWD;
-              esp_task_wdt_reset();
-              //SOUT("cycle "); SOUT((uint32_t) actWD*1000/count); SOUT(" "); SOUTLN(count);
-              //count = 0;
+              //esp_task_wdt_reset();
+                //SOUT("cycle "); SOUT((uint32_t) actWD*1000/count); SOUT(" "); SOUTLN(count);
+                //count = 0;
             }
           if (_tCtrl < TTASK_ON_HOLD)
             {
               tch = _ptouchev->getTouchPos(&p, &raw);
               if (tch)
                 {
-                  if (raw.x < 0) raw.x = 0;
-                  if (raw.y < 0) raw.y = 0;
-                  if (p.x < 0) p.x = 0;
-                  if (p.y < 0) p.y = 0;
-                  _tactRaw = (raw.x << 16) + raw.y;
-                  _tactXY  = (p.x << 16) + p.y;
-                  SOUT("ttask "); SOUT(p.x); SOUT("/"); SOUT(p.y); SOUT(" "); SOUTHEXLN(_tactXY);
+                  if (_hTcount < 1)
+                    {
+                      _hTcount++;
+                      if (raw.x < 0) raw.x = 0;
+                      if (raw.y < 0) raw.y = 0;
+                      if (p.x < 0) p.x = 0;
+                      if (p.y < 0) p.y = 0;
+                      _tactRaw = (raw.x << 16) + raw.y;
+                      _tactXY  = (p.x << 16) + p.y;
+                      SOUT(actWD); SOUT(" "); SOUT(_hTcount); SOUT(" ttask "); SOUT(p.x); SOUT("/"); SOUT(p.y); SOUT(" "); SOUTHEXLN(_tactXY);
+                    }
+                  else
+                    {
+                      if (_hTcount < 25) {_hTcount++;  }
+                      else            {_hTcount = 0;}
+                      //SOUT(actWD); SOUT(" "); SOUTLN(_hTcount);
+                    }
                 }
             }
           //count++;
+          usleep(_tWait_us);
         }
                /*if (pts_->isTouching())
                   {
@@ -83,21 +94,20 @@
                     //pts->isrWake = false;
                   }
                  */
-      usleep(_tWait_us);
     }
 
-    void startTouchTask()
-      {
-        xTaskCreatePinnedToCore(
-                            handleTouch,           /* Task function. */
-                            "touchTask",           /* name of task. */
-                            10000,                 /* Stack size of task */
-                            NULL,                  /* parameter of the task */
-                            4 | portPRIVILEGE_BIT, /* priority of the task */
-                            &_touchTask,            /* Task handle to keep track of created task */
-                            0              );      /* pin task to core 0 */
-        SOUTLN("touchTask started on core 0");
-      }
+  void startTouchTask()
+    {
+      xTaskCreatePinnedToCore(
+                          handleTouch,           /* Task function. */
+                          "touchTask",           /* name of task. */
+                          10000,                 /* Stack size of task */
+                          NULL,                  /* parameter of the task */
+                          4 | portPRIVILEGE_BIT, /* priority of the task */
+                          &_touchTask,            /* Task handle to keep track of created task */
+                          0              );      /* pin task to core 0 */
+      SOUTLN("touchTask started on core 0");
+    }
 
 // task menuTask
 
@@ -117,7 +127,7 @@
 
   void  tText::setText(String Text)
     {
-
+        setText(Text.c_str());
     }
 
   char* tText::getText(char* pText)
@@ -197,21 +207,23 @@
     void md_touch::wrStatus(const char* msg, uint8_t mode)
       {
         _statbox.setText(msg);
+        usleep(200000);
         _statbox.show(mode);
+        usleep(200000);
       }
 
     void md_touch::wrStatus(String msg, uint8_t mode)
       {
+        wrStatus(msg.c_str(), mode);
       }
 
     void md_touch::wrText(const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len)
       {
-
       }
 
     void md_touch::wrText(String msg, uint8_t spalte, uint8_t zeile, uint8_t len)
       {
-
+        wrText(msg.c_str(), spalte, zeile, len);
       }
 
     void md_touch::setRotation(uint8_t rotation)
@@ -224,6 +236,7 @@
         return _rotation;
       }
 
+    void md_touch::run() {}
   // protected implementation
     void md_touch::start(uint8_t rotation, uint16_t background)
       {
@@ -251,7 +264,7 @@
           {
             case MD_RDY:
                 wrStatus("Kalibrierung gefunden", MD_SEL);
-                sleep(1);
+                //sleep(1);
                 #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                     SOUTLN("             .. load calibration ok ");
                   #endif
@@ -301,6 +314,7 @@
         sleep(1);
         _statbox.hide();
       }
+
     void md_touch::loadCalibration()
       {
         uint16_t a,b,c,d;
@@ -346,6 +360,7 @@
                   SOUTLN(pCal->printCal50(buf));
                 #endif
         _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
+        pConf->end();
       }
 
     void md_touch::checkCalibration()
@@ -455,6 +470,7 @@
                     doExit = true;
                     _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
                     _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
+                    break;
                   }
                 else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
                          && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
@@ -1115,7 +1131,7 @@
     }
   bool md_touch::wrStatus(const char *msg)
     {
-      return wrStatus(msg,STAT_TIMEDEF);
+      return wrStatus(msg,STAT_DELTIME);
     }
   bool md_touch::wrStatus(const char *msg, uint32_t stayTime)
     {
@@ -1146,7 +1162,7 @@
           isStatus = true;
           if (stayTime == 0)
           {
-            stayTime = STAT_TIMEDEF;
+            stayTime = STAT_DELTIME;
           }
                 #if (DEBUG_MODE >= CFG_DEBUG_ACTIONS)
                   Serial.print((uint32_t) millis());
