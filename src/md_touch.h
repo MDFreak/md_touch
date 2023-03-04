@@ -41,6 +41,14 @@
     #define MD_GREENYELLOW 0xAFE5 /* 173, 255,  47 */
     #define MD_PINK 0xF81F
 
+  //Farben fuer die Bloecke
+    const uint16_t colorBlock[8] =
+      {
+        ILI9341_BLACK, ILI9341_YELLOW, ILI9341_RED,
+        ILI9341_CYAN,  ILI9341_GREEN,  ILI9341_PURPLE,
+        ILI9341_BLUE,  ILI9341_ORANGE
+      };
+
   // --- parameters for touchscreen
     #define MINPRESSURE 10 // pressure to detect touch
     // touchscreen
@@ -202,7 +210,7 @@
     // --- class tPoint
       class tPoint
         {
-        public:
+          public:
           tPoint(void) {}
           tPoint(int16_t _x, int16_t _y) { set(_x, _y); }
 
@@ -237,93 +245,92 @@
     // --- class tText
       class tText
         {
-        protected:
-          char *_text = NULL;
-          uint16_t _len = 0;
-          uint8_t _size = 2;
-          uint8_t _bpos = TXT_LEFT; // orientation
+          protected:
+            char *_text = NULL;
+            uint16_t _len = 0;
+            uint8_t _size = 2;
+            uint8_t _bpos = TXT_LEFT; // orientation
 
-        public:
-          tText() {}
-          ~tText()
-            {
-              if (_text != NULL)
-                delete _text;
-            }
+          public:
+            tText() {}
+            ~tText()
+              {
+                if (_text != NULL)
+                  delete _text;
+              }
 
-          void setText(const char *pTxt);
-          void setText(String Text);
-          char *getText(char *pText);
-          void setLen(uint8_t len)
-            {
-              _len = len;
-            }
-          void setTextSize(uint8_t textSize)
-            {
-              _size = textSize;
-            }
-          uint8_t txtSize()
-            {
-              return _size;
-            }
-          void setOrient(uint8_t orient)
-            {
-              _bpos = orient;
-            }
+            void setText(const char *pTxt);
+            void setText(String Text);
+            char *getText(char *pText);
+            void setLen(uint8_t len)
+              {
+                _len = len;
+              }
+            void setTextSize(uint8_t textSize)
+              {
+                _size = textSize;
+              }
+            uint8_t txtSize()
+              {
+                return _size;
+              }
+            void setOrient(uint8_t orient)
+              {
+                _bpos = orient;
+              }
         };
 
     // --- class tBox
       class tBox
         {
-        protected:
-          int16_t _x = 0; // position top/left
-          int16_t _y = 0; // position top/left
-          uint16_t _w = 10;
-          uint16_t _h = 10;
+          protected:
+            int16_t _x = 0; // position top/left
+            int16_t _y = 0; // position top/left
+            uint16_t _w = 10;
+            uint16_t _h = 10;
 
-        public:
-          tBox() {}
-          tBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
-            {
-              setPos(x, y);
-              setSize(w, h);
-            }
+          public:
+            tBox() {}
+            tBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+              {
+                setPos(x, y);
+                setSize(w, h);
+              }
 
-          void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
-            {
-              _x = x;
-              _y = y;
-              _w = w;
-              _h = h;
-            }
-          void setPos(int16_t x, int16_t y)
-            {
-              _x = x;
-              _y = y;
-            }
-          void setSize(uint16_t w, uint16_t h)
-            {
-              _w = w;
-              _h = h;
-            }
-          int16_t  x() { return _x; }
-          int16_t  y() { return _y; }
-          uint16_t w() { return _w; }
-          uint16_t h() { return _h; }
+            void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+              {
+                _x = x;
+                _y = y;
+                _w = w;
+                _h = h;
+              }
+            void setPos(int16_t x, int16_t y)
+              {
+                _x = x;
+                _y = y;
+              }
+            void setSize(uint16_t w, uint16_t h)
+              {
+                _w = w;
+                _h = h;
+              }
+            int16_t  x() { return _x; }
+            int16_t  y() { return _y; }
+            uint16_t w() { return _w; }
+            uint16_t h() { return _h; }
+            char *printbox(char *p)
+              {
+                sprintf(p, "%3i %3i %3i %3i", _x, _y, _w, _h);
+                return p;
+              }
 
-          char *printbox(char *p)
-            {
-              sprintf(p, "%3i %3i %3i %3i", _x, _y, _w, _h);
-              return p;
-            }
-
-          void operator=(tBox p)
-            {
-              _x = p.x();
-              _y = p.y();
-              _w = p.w();
-              _h = p.h();
-            };
+            void operator=(tBox p)
+              {
+                _x = p.x();
+                _y = p.y();
+                _w = p.w();
+                _h = p.h();
+              };
         };
 
     // --- class tButton_def
@@ -528,18 +535,18 @@
         };
     // --- class tList
       class tList : public md_list
-      {
-        private:
-          uint8_t  _iscal = false;
-          uint32_t _actid = 0;
+        {
+          private:
+            uint8_t  _iscal = false;
+            uint32_t _actid = 0;
 
-        public:
-          tList() {}
-          ~tList() {}
+          public:
+            tList() {}
+            ~tList() {}
 
-          void append();
-          void remove();
-      };
+            void append();
+            void remove();
+        };
 #endif
 
 #ifdef PARKEN

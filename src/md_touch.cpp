@@ -543,7 +543,7 @@
             char buf[20];
             sprintf(buf,"%3i %3i %4i %4i",pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
             SOUT("new calib file '"); SOUT(buf); SOUTLN("'");
-            pConf->writeFile("/tcalib.dat", buf);
+            pConf->writeFile("/tcalib.dat", &buf[0]);
           }
         else
           {
