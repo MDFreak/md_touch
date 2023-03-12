@@ -107,8 +107,69 @@
   // calibration
     #define CAL_FCONF "/conf.dat"
     #define CAL_FCALIB "/tcalib.dat"
+  // masks for coding enries for class tButton_def
+    /* tButton_def is an atomic bit coded value and
+     * contains all information for navigation and evaluation
+     */
+      typedef enum CODE_MASK
+        {
+          MENCOL_MASK      = 0xF0000000, // F0000000h  bits 31-28 screen column
+                                         // col 1,2     witches for output (20), output (140)
+                                         // col 3       titel (130 size 2/3)
+                                         // col 5       main screen, menu
+                                         // col 9,10    menu control buttons
+          LINLEVS_MASK     = 0x0FFFF000, // 0FFFF000h  bits 27-12 screen line all levels
+          LINLEV3_MASK     = 0x0F000000, // 0F000000h  bits 27-24 screen line in main menu level 3
+          LINLEV2_MASK     = 0x00F00000, // 00F00000h  bits 23-20 screen line in main menu level 3
+          LINLEV1_MASK     = 0x000F0000, // 000F0000h  bits 19-16 screen line in main menu level 3
+          LINLEV0_MASK     = 0x0000F000, // 0000F000h  bits 15-12 screen line in main menu level 3
+          RES11_4_MASK     = 0x00000FF0, // reserved
+          MENISSEL_MASK    = 0x0000000B, // 0000000Bh  bits 3,1-0 selected (! & SEL & VIS !)
+          MENISSEL_BIT     = 0x00000008, // 00000008h  bits 3     selected - provided for decoding
+          MENACT_MASK      = 0x00000005, // 00000005h  bit  2,0   active touchable (! & VIS !)
+          MENACT_BIT       = 0x00000004, // 00000005h  bit  2     active - provided for decoding
+          MENSEL_MASK      = 0x00000003, // 00000003h  bit  1-0   available for (de-)select (! & VIS !)
+          MENSEL_BIT       = 0x00000002, // 00000003h  bit  1     selectable provided for decoding
+          MENVIS_MASK      = 0x00000001, // 00000001h  bit  0     visible
+          MENVIS_BIT       = 0x00000001, // 00000001h  bit  0     visible
+        } CODE_MASK_t;
+      typedef enum CODE_SHIFT
+        {
+          MENCOL_SHIFT      = 28, // F0000000h  bits 31-28 screen column
+                                         // col 1,2     witches for output (20), output (140)
+                                         // col 3       titel (130 size 2/3)
+                                         // col 5       main screen, menu
+                                         // col 9,10    menu control buttons
+          LINLEVS_SHIFT     = 12, // 0FFFF000h  bits 27-12 screen line all levels
+          LINLEV3_SHIFT     = 24, // 0F000000h  bits 27-24 screen line in main menu level 3
+          LINLEV2_SHIFT     = 20, // 00F00000h  bits 23-20 screen line in main menu level 3
+          LINLEV1_SHIFT     = 16, // 000F0000h  bits 19-16 screen line in main menu level 3
+          LINLEV0_SHIFT     = 12, // 0000F000h  bits 15-12 screen line in main menu level 3
+          RES11_4_SHIFT     =  4, // reserved
+          MENISSEL_SHIFT    =  0, // 0000000Bh  bits 3,1-0 selected                  (! & SEL & VIS !)
+          MENACT_SHIFT      =  0, // 00000005h  bit  2,0   active touchable          (! & VIS !)
+          MENSEL_SHIFT      =  0, // 00000003h  bit  1-0   available for (de-)select (! & VIS !)
+          MENVIS_SHIFT      =  0, // 00000001h  bit  0     visible
+        } CODE_SHIFT_t;
 
-  // --- parameters for menu
+  // parameters for menu
+      typedef enum MENU_ACT
+        {
+          ACTNO = 0,
+          // PREV,
+          // NEXT,
+          PREVPAGE,
+          NEXTPAGE,
+          HIDE,
+          SHOW,
+          DOIT,
+          ACTMAX
+        } MENU_ACT_t;
+      #define MENU_TXTLEN 25
+      #define MENUTYPE_MAIN 0
+      #define MENUTYPE_PAGE 1
+      #define MENU_MAXLINES 8
+      #define MENU_FONT ArialRoundedMTBold_14
     // colunm position
       #define MEN_BUT_SIZE 24
       #define MEN_COL1_X 5
@@ -136,7 +197,6 @@
   // --- classes
     void handleTouch(void *pvParameters);
     // void handleMenu(void * pvParameters);
-
     // --- class tColors
       class tColors
         {
@@ -348,10 +408,10 @@
        *   15-12 screen line in main menu level 0
        *   11- 4 reserved
        *    3- 0 menu status bits
-       *          3 reserved
-       *          2 maybe selected (used by handleMenu)
-       *          1 visible,
-       *          0 active for touching (only if visible)
+       *         3(,1-0) selected
+       *         2(,0)   touchable
+       *         1(-0)   selectable
+       *         0       visible
        */
       class tButton_def // 0b cccc LLLL UUUU llll uuuu .... .... ..va
         {
@@ -366,29 +426,34 @@
               {
                 _id = id;
               }
-            void setAct(uint8_t active) //  can be touched
+            void setAct(uint8_t active, uint8_t bitonly = FALSE) //  can be touched
               {
-                if (active) { _id |= 0x00000001; }
-                else        { _id &= 0xFFFFFFFE; }
+                if (!active) { _id &= !MENACT_BIT;  return; }
+                if (bitonly) { _id |=  MENACT_BIT;  }
+                else         { _id |=  MENACT_MASK; }
               }
             void setVis(uint8_t visible) // is visible
               {
-                if (visible) { _id |= 0x00000002; }
-                else         { _id &= 0xFFFFFFFD; }
+                if (visible) { _id |= MENVIS_BIT; }
+                else         { _id &= MENVIS_BIT; }
               }
             void setCol(uint8_t column) //  column of screen
               {
-                _id |= (_id & 0x0FFFFFFF) | (column & 0xF0000000);
+                _id = (_id & MENCOL_MASK) | ((column %16) << MENCOL_SHIFT);
               }
             void setMenu(uint16_t menuhex) // menu position - menu 0 = main menu
               {
-                _id |= (_id & 0xF0000FFF) | (menuhex << 12);
+                //_id |= (_id & 0xF0000FFF) | (menuhex << 12);
+                _id =   (_id & !LINLEVS_MASK)
+                      | (menuhex << LINLEVS_SHIFT);
               }
             void setMenu(uint8_t menu0, uint8_t menu1,uint8_t menu2,uint8_t menu3) // menu position - menu 0 = main menu
               {
-                setMenu(  ((menu3 % 16) << 12) + ((menu2 % 16) << 8)
-                        + ((menu1 % 16) << 4)  +  (menu0 % 16)
-                       );
+                _id =   (_id & !LINLEVS_MASK)
+                      | ((menu3 % 16) << LINLEV3_SHIFT)
+                      | ((menu2 % 16) << LINLEV2_SHIFT)
+                      | ((menu1 % 16) << LINLEV1_SHIFT)
+                      | ((menu0 % 16) << LINLEV0_SHIFT) ;
               }
             uint32_t id()
               {
@@ -396,35 +461,43 @@
               }
             uint8_t isAct()
               {
-                return (uint8_t)_id & 0x00000001;
+                //return (uint8_t)_id & 0x00000001;
+                return (uint8_t) _id & MENACT_BIT;
               }
             uint8_t isVis()
               {
-                return (uint8_t)_id & 0x00000002;
+                //return (uint8_t)_id & 0x00000002;
+                return (uint8_t)_id & MENVIS_BIT;
               }
             uint8_t col()
               {
-                return (uint8_t)((_id & 0xF0000000) >> 28);
+                //return (uint8_t)((_id & 0xF0000000) >> 28);
+                return (uint8_t)((_id & MENCOL_MASK) >> MENCOL_SHIFT);
               }
             uint8_t m0()
               {
-                return (uint8_t)((_id & 0x0F000000) >> 24);
+                //return (uint8_t)((_id & LINLEV0_MASK) >> 24);
+                return (uint8_t)((_id & LINLEV0_MASK) >> LINLEV0_SHIFT);
               }
             uint8_t m1()
               {
-                return (uint8_t)((_id & 0x00F00000) >> 20);
+                //return (uint8_t)((_id & 0x00F00000) >> 20);
+                return (uint8_t)((_id & LINLEV1_MASK) >> LINLEV1_SHIFT);
               }
             uint8_t m2()
               {
-                return (uint8_t)((_id & 0x000F0000) >> 16);
+                //return (uint8_t)((_id & 0x000F0000) >> 16);
+                return (uint8_t)((_id & LINLEV2_MASK) >> LINLEV2_SHIFT);
               }
             uint8_t m3()
               {
-                return (uint8_t)((_id & 0x0000F000) >> 12);
+                //return (uint8_t)((_id & 0x0000F000) >> 12);
+                return (uint8_t)((_id & LINLEV3_MASK) >> LINLEV3_SHIFT);
               }
             uint16_t menu()
               {
-                return (uint16_t)((_id & 0x0FFFF000) >> 12);
+                //return (uint16_t)((_id & 0x0FFFF000) >> 12);
+                return (uint16_t)((_id & LINLEVS_MASK) >> LINLEVS_SHIFT);
               }
         };
 
@@ -484,8 +557,8 @@
 
             void setCalib(uint16_t _xmin, uint16_t _ymin, uint16_t _xmax, uint16_t _ymax)
               {
-                xmin = _xmin;
-                ymin = _ymin, xmax = _xmax, ymax = _ymax;
+                xmin = _xmin; xmax = _xmax;
+                ymin = _ymin; ymax = _ymax;
               }
             virtual char *printPts56(char *pcalData)
               {
@@ -547,9 +620,7 @@
             void append();
             void remove();
         };
-#endif
 
-#ifdef PARKEN
   //--- class md_menu
   /* --- menu    brief description ---
       a menu is realized with a linked list structure taking dynamic
@@ -591,6 +662,10 @@
           - no entry action define => done automatically
           - otherwise              => interrupt main program
     */
+
+#endif
+
+#ifdef PARKEN
   typedef enum MENU_ACT
   {
     ACTNO = 0,

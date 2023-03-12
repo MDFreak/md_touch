@@ -56,7 +56,7 @@
                 //SOUT("cycle "); SOUT((uint32_t) actWD*1000/count); SOUT(" "); SOUTLN(count);
                 //count = 0;
             }
-          if (_tCtrl < TTASK_ON_HOLD)
+          if (_tCtrl < TTASK_ON_HOLD) // only poll, if touch is released from extern
             {
               tch = _ptouchev->getTouchPos(&p, &raw);
               if (tch)
@@ -104,11 +104,10 @@
                           10000,                 /* Stack size of task */
                           NULL,                  /* parameter of the task */
                           4 | portPRIVILEGE_BIT, /* priority of the task */
-                          &_touchTask,            /* Task handle to keep track of created task */
+                          &_touchTask,           /* Task handle to keep track of created task */
                           0              );      /* pin task to core 0 */
       SOUTLN("touchTask started on core 0");
     }
-
 // task menuTask
 
 // --- class tColors
@@ -236,7 +235,10 @@
         return _rotation;
       }
 
-    void md_touch::run() {}
+    void md_touch::run()
+      {
+
+      }
   // protected implementation
     void md_touch::start(uint8_t rotation, uint16_t background)
       {
@@ -273,13 +275,13 @@
                 #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                     SOUTLN("             .. check and save calib ");
                   #endif
-              doCalibration();
+                doCalibration();
               break;
             default:
                 #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                     SOUTLN("             .. is to be calibrated");
                   #endif
-              doCalibration();
+                doCalibration();
               break;
           }
         startTouchTask();
@@ -359,8 +361,8 @@
               #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                   SOUTLN(pCal->printCal50(buf));
                 #endif
-        _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
         pConf->end();
+        _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
       }
 
     void md_touch::checkCalibration()
@@ -536,6 +538,7 @@
       {
         if (pCal != NULL)
           {
+            pConf->init(pConf);
             if (pConf->exists("/tcalib.dat"))
               {
                 pConf->remove("/tcalib.dat");
@@ -544,6 +547,7 @@
             sprintf(buf,"%3i %3i %4i %4i",pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
             SOUT("new calib file '"); SOUT(buf); SOUTLN("'");
             pConf->writeFile("/tcalib.dat", &buf[0]);
+            pConf->end();
           }
         else
           {
