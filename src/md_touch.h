@@ -2,686 +2,550 @@
 #ifndef _MD_TOUCH_H_
   #define _MD_TOUCH_H_
 
-  #ifndef DEBUG_MODE
-  #define DEBUG_MODE CFG_DEBUG_STARTUP
-  #endif
-  //#include "FS.h"
-  #include <SPI.h>
-  #include <md_defines.h>
-  #include <md_util.h>
-  #include <md_spiffs.h>
-  #include <XPT2046_Touchscreen.h>
-  #include <Adafruit_GFX.h>     //Grafik Bibliothek
-  #include <Adafruit_ILI9341.h> // Display Treiber
-  #include <md_TouchEvent.h>    //Auswertung von Touchscreen Ereignissen
-  #include <linked_list.hpp>
-  #include <esp_task_wdt.h>
+  /* --- touch & menu - a brief description ---
+   *  touch menu task
+   *  - checks touch event and delivers position in 2 variables
+   *    - _tactRaw = raw value: hword = x, lword = y
+   *    - _tactXY  = pix value: hword = x, lword = y
+   *  no semaphores are used because
+   *  - configuration is done before task is started
+   *  - an 2 atomic uint32_t values are used to
+   *    1) control the menu position and
+   *    2) read the touch value.
+   *    - one side only sets a value when read a 0
+   *    - the other side resets the value when the value was ready
+   *      and the work was done
+   *
+   *  - this means every value has 15 possible values
+   *    atomic 'output', 'control' values
+   *  - both values are designed to be used as 4 uint8_t values
+   *  - each value has 4 bits for both old (=actual) and new (=desired) value
+   *    15 pages, 15 columns, 15 entries, 15 actions
+   *
+   *  - 'action' type MENU_ACT_t -> UP, DOWN, PREVPAGE, NEXTPAGE, DOIT ...
+   *      new = (uint8_t) ( 'output' & 0x0000 000F       )
+   *      old = (uint8_t) (('output' & 0x0000 00F0) >>  4)
+   *  - 'entry'  uint8_t [0..15]
+   *      new = (uint8_t) ( 'output' & 0x0000 0F00      8)
+   *      old = (uint8_t) (('output' & 0x0000 F000) >> 12)
+   *  - 'page'   uint8_t [0..15]
+   *      new = (uint8_t) ( 'output' & 0x000F 0000     16)
+   *      old = (uint8_t) (('output' & 0x00F0 0000) >> 20)
+   *  - 'level'  uint8_t [0..15]
+   *       new = (uint8_t) (('output' & 0x0F00 0000) >> 24)
+   *       old = (uint8_t) (('output' & 0xF000 0000) >> 28)
+   *
+   *  function
+   *  - moving inside menu
+   *    - on exit
+   *      - no exit action define  => done automatically
+   *      - otherwise              => interrupt main program
+   *    - on entry
+   *      - no entry action define => done automatically
+   *      - otherwise              => interrupt main program
+   */
 
+
+  #ifndef DEBUG_MODE
+      #define DEBUG_MODE CFG_DEBUG_STARTUP
+    #endif
+  // includes
+    //#include "FS.h"
+    #include <SPI.h>
+    #include <md_defines.h>
+    #include <md_util.h>
+    #include <md_spiffs.h>
+    #include <XPT2046_Touchscreen.h>
+    #include <Adafruit_GFX.h>     //Grafik Bibliothek
+    #include <Adafruit_ILI9341.h> // Display Treiber
+    #include <md_TouchEvent.h>    //Auswertung von Touchscreen Ereignissen
+    #include <AT_Display.h>
+    #include <linked_list.hpp>
+    #include <esp_task_wdt.h>
+    #include <fonts\AT_Bold12pt7b.h>
+    #include <fonts\AT_BoldOblique9pt7b.h>
+    #include <fonts\AT_Oblique9pt7b.h>
+    #include <fonts\AT_Standard9pt7b.h>
   // --- system
     #define WDT_TTIMEOUT 3
-
+    #define TFT_FREQU    2000000
+  // --- 2-dim point
+      // --- class tPoint - 2 dimensions
+        typedef struct POINT_t
+          {
+           	int16_t x;
+           	int16_t y;
+            bool operator==(POINT_t p)  { return ((p.x == x) && (p.y == y)); }
+            void operator= (POINT_t p)  { x = p.x; y = p.y; }
+            bool operator==(TS_Point p) { return ((p.x == x) && (p.y == y)); }
+            void operator= (TS_Point p) { x = p.x; y = p.y; }
+            virtual char *print2char15(char *buf)
+              {
+                sprintf(buf, "x %4i y %4i", x, y);
+                return buf;
+              }
+          } POINT_t;
   // --- color definitions
-    #define MD_BLACK 0x0000       /*   0,   0,   0 */
-    #define MD_NAVY 0x000F        /*   0,   0, 128 */
-    #define MD_DARKGREEN 0x03E0   /*   0, 128,   0 */
-    #define MD_DARKCYAN 0x03EF    /*   0, 128, 128 */
-    #define MD_MAROON 0x7800      /* 128,   0,   0 */
-    #define MD_PURPLE 0x780F      /* 128,   0, 128 */
-    #define MD_OLIVE 0x7BE0       /* 128, 128,   0 */
-    #define MD_LIGHTGREY 0xC618   /* 192, 192, 192 */
-    #define MD_DARKGREY 0x7BEF    /* 128, 128, 128 */
-    #define MD_BLUE 0x001F        /*   0,   0, 255 */
-    #define MD_GREEN 0x07E0       /*   0, 255,   0 */
-    #define MD_CYAN 0x07FF        /*   0, 255, 255 */
-    #define MD_RED 0xF800         /* 255,   0,   0 */
-    #define MD_MAGENTA 0xF81F     /* 255,   0, 255 */
-    #define MD_YELLOW 0xFFE0      /* 255, 255,   0 */
-    #define MD_WHITE 0xFFFF       /* 255, 255, 255 */
-    #define MD_ORANGE 0xFD20      /* 255, 165,   0 */
-    #define MD_GREENYELLOW 0xAFE5 /* 173, 255,  47 */
-    #define MD_PINK 0xF81F
-
-  //Farben fuer die Bloecke
-    const uint16_t colorBlock[8] =
-      {
-        ILI9341_BLACK, ILI9341_YELLOW, ILI9341_RED,
-        ILI9341_CYAN,  ILI9341_GREEN,  ILI9341_PURPLE,
-        ILI9341_BLUE,  ILI9341_ORANGE
-      };
-
-  // --- parameters for touchscreen
-    #define MINPRESSURE 10 // pressure to detect touch
-    // touchscreen
-
-  #ifndef TS_MINX
-    #define TS_MINX 230  // minimal x return value
-    #define TS_MINY 350  // minimal y return value
-    #define TS_MAXX 3700 // maximal x return value
-    #define TS_MAXY 3900 // maximal y return value
-  #endif
-  // 496 //262 //3997 //3925
-
-  void actLev(uint8_t level);
-  uint8_t actLev(void);
-  void oldLev(uint8_t level);
-  uint8_t oldLev(void);
-  void actLev(uint8_t level);
-  uint8_t actLev(void);
-  void oldLev(uint8_t level);
-  uint8_t oldLev(void);
-
-  /*
-      #ifndef TS_MINX
-          #define TS_MINX 325
-          #define TS_MINY 200
-          #define TS_MAXX 3850
-          #define TS_MAXY 3700
-        #endif
-    */
-
-  // text defines
-    #define TXT_LEFT 0
-    #define TXT_CENTER 1
-    #define TXT_RIGHT 2
-    #define TXT_CHAR1_H 8
-    #define TXT_CHAR1_W 6
-
-  // colors
-    #define COL_BUT_DEF MD_BLACK
-    #define COL_BUT_SEL MD_PURPLE
-    #define COL_BUT_RDY MD_DARKGREEN
-    #define COL_BUT_EME MD_RED
-    #define COL_TXT_DEF MD_ORANGE
-    #define COL_TXT_SEL MD_GREENYELLOW
-    #define COL_TXT_RDY MD_WHITE
-    #define COL_TXT_EME MD_GREENYELLOW // MD_PURPLE
-    #define COL_BACK MD_BLACK
-
-  // status window
-    #define STAT_X 4
-    #define STAT_Y 229
-    #define STAT_W 314
-    #define STAT_H 12
-    #define STAT_SIZE 1
-    #define STAT_ORIENT TXT_CENTER
-  // calibration
-    #define CAL_FCONF "/conf.dat"
-    #define CAL_FCALIB "/tcalib.dat"
-  // masks for coding enries for class tButton_def
-    /* tButton_def is an atomic bit coded value and
-     * contains all information for navigation and evaluation
-     */
-      typedef enum CODE_MASK
+    // --- basic colors
+      typedef enum md_colors : uint16_t
         {
-          MENCOL_MASK      = 0xF0000000, // F0000000h  bits 31-28 screen column
-                                         // col 1,2     witches for output (20), output (140)
-                                         // col 3       titel (130 size 2/3)
-                                         // col 5       main screen, menu
-                                         // col 9,10    menu control buttons
-          LINLEVS_MASK     = 0x0FFFF000, // 0FFFF000h  bits 27-12 screen line all levels
-          LINLEV3_MASK     = 0x0F000000, // 0F000000h  bits 27-24 screen line in main menu level 3
-          LINLEV2_MASK     = 0x00F00000, // 00F00000h  bits 23-20 screen line in main menu level 3
-          LINLEV1_MASK     = 0x000F0000, // 000F0000h  bits 19-16 screen line in main menu level 3
-          LINLEV0_MASK     = 0x0000F000, // 0000F000h  bits 15-12 screen line in main menu level 3
-          RES11_4_MASK     = 0x00000FF0, // reserved
-          MENISSEL_MASK    = 0x0000000B, // 0000000Bh  bits 3,1-0 selected (! & SEL & VIS !)
-          MENISSEL_BIT     = 0x00000008, // 00000008h  bits 3     selected - provided for decoding
-          MENACT_MASK      = 0x00000005, // 00000005h  bit  2,0   active touchable (! & VIS !)
-          MENACT_BIT       = 0x00000004, // 00000005h  bit  2     active - provided for decoding
-          MENSEL_MASK      = 0x00000003, // 00000003h  bit  1-0   available for (de-)select (! & VIS !)
-          MENSEL_BIT       = 0x00000002, // 00000003h  bit  1     selectable provided for decoding
-          MENVIS_MASK      = 0x00000001, // 00000001h  bit  0     visible
-          MENVIS_BIT       = 0x00000001, // 00000001h  bit  0     visible
-        } CODE_MASK_t;
-      typedef enum CODE_SHIFT
+          MD_BLACK        = 0x0000u, /*   0,   0,   0 */
+          MD_NAVY         = 0x000Fu, /*   0,   0, 128 */
+          MD_DARKGREEN    = 0x03E0u, /*   0, 128,   0 */
+          MD_DARKCYAN     = 0x03EFu, /*   0, 128, 128 */
+          MD_MAROON       = 0x7800u, /* 128,   0,   0 */
+          MD_PURPLE       = 0x780Fu, /* 123,   0, 123 */
+          MD_OLIVE        = 0x7BE0u, /* 128, 128,   0 */
+          MD_LIGHTGREY    = 0xC618u, /* 192, 192, 192 */
+          MD_DARKGREY     = 0x7BEFu, /* 128, 128, 128 */
+          MD_BLUE         = 0x001Fu, /*   0,   0, 255 */
+          MD_GREEN        = 0x07E0u, /*   0, 255,   0 */
+          MD_CYAN         = 0x07FFu, /*   0, 255, 255 */
+          MD_RED          = 0xF800u, /* 255,   0,   0 */
+          MD_MAGENTA      = 0xF81Fu, /* 255,   0, 255 */
+          MD_YELLOW       = 0xFFE0u, /* 255, 255,   0 */
+          MD_WHITE        = 0xFFFFu, /* 255, 255, 255 */
+          MD_ORANGE       = 0xFD20u, /* 255, 165,   0 */
+          MD_GREENYELLOW  = 0xAFE5u /* 173, 255,  47 */
+        } MD_COLORS_t;
+  // --- touchscreen
+    // basics
+      #define MINPRESSURE 10 // pressure to detect touch
+    // touch timing
+      #define TOUCH_TASK_SLEEP_US 10000ul
+      #define TOUCH_CLICK_TIME_MS 20
+      #define TOUCH_LONG_TIME_MS  400
+    // screen
+      // orientation 0
+        #define DEF_0_TFTW 240  // width in pixel
+        #define DEF_0_TFTH 320  // hight in pixel
+        #define DEF_0_MINX 366  // minimal x return value
+        #define DEF_0_MINY 228  // minimal y return value
+        #define DEF_0_MAXX 3677 // maximal x return value
+        #define DEF_0_MAXY 3527 // maximal y return value
+      // orientation 1
+        #define DEF_1_TFTW 320  // width in pixel
+        #define DEF_1_TFTH 240  // hight in pixel
+        #define DEF_1_MINX 260  // minimal x return value
+        #define DEF_1_MINY 409  // minimal y return value
+        #define DEF_1_MAXX 3546 // maximal x return value
+        #define DEF_1_MAXY 3794 // maximal y return value
+      // orientation 2
+        #define DEF_2_TFTW 240  // width in pixel
+        #define DEF_2_TFTH 320  // hight in pixel
+        #define DEF_2_MINX 421  // minimal x return value
+        #define DEF_2_MINY 570  // minimal y return value
+        #define DEF_2_MAXX 3762 // maximal x return value
+        #define DEF_2_MAXY 3849 // maximal y return value
+      // orientation 3
+        #define DEF_3_TFTW 320  // width in pixel
+        #define DEF_3_TFTH 240  // hight in pixel
+        #define DEF_3_MINX 525  // minimal x return value
+        #define DEF_3_MINY 345  // minimal y return value
+        #define DEF_3_MAXX 3877 // maximal x return value
+        #define DEF_3_MAXY 3738 // maximal y return value
+    // handshake format
+      #define TOUCH_HRAW_BITS     16
+      #define TOUCH_HRAW_SHIFT    TOUCH_HRAW_BITS
+      #define TOUCH_HRAW_MASK     0x0000FFFFul
+      #define TOUCH_HPOINT_BITS   14
+      #define TOUCH_HPOINT_SHIFT  TOUCH_HPOINT_BITS
+      #define TOUCH_HPOINT_MASK   0x00003FFFul
+      #define TOUCHED_TYPE_BITS   4
+      #define TOUCHED_TYPE_SHIFT  28
+      #define TOUCHED_TYPE_NMASK  0x0FFFFFFFul  // 0FFFFFFF
+    // click types (max 15)
+      #define TOUCH_TYPE_CLICK    1
+      #define TOUCH_TYPE_LONG     2
+      #define TOUCH_TYPE_DOUBLE   3  // TODO to implement
+      #define TOUCH_TYPE_MOVE     4  // TODO to implement
+      #define TOUCH_TYPE_MAX      15 // mask = max type no.
+    // --- class md_touch
+      class md_touch    // public Adafruit_ILI9341, public XPT2046_Touchscreen,
         {
-          MENCOL_SHIFT      = 28, // F0000000h  bits 31-28 screen column
-                                         // col 1,2     witches for output (20), output (140)
-                                         // col 3       titel (130 size 2/3)
-                                         // col 5       main screen, menu
-                                         // col 9,10    menu control buttons
-          LINLEVS_SHIFT     = 12, // 0FFFF000h  bits 27-12 screen line all levels
-          LINLEV3_SHIFT     = 24, // 0F000000h  bits 27-24 screen line in main menu level 3
-          LINLEV2_SHIFT     = 20, // 00F00000h  bits 23-20 screen line in main menu level 3
-          LINLEV1_SHIFT     = 16, // 000F0000h  bits 19-16 screen line in main menu level 3
-          LINLEV0_SHIFT     = 12, // 0000F000h  bits 15-12 screen line in main menu level 3
-          RES11_4_SHIFT     =  4, // reserved
-          MENISSEL_SHIFT    =  0, // 0000000Bh  bits 3,1-0 selected                  (! & SEL & VIS !)
-          MENACT_SHIFT      =  0, // 00000005h  bit  2,0   active touchable          (! & VIS !)
-          MENSEL_SHIFT      =  0, // 00000003h  bit  1-0   available for (de-)select (! & VIS !)
-          MENVIS_SHIFT      =  0, // 00000001h  bit  0     visible
-        } CODE_SHIFT_t;
+          private:
+            int16_t   _tsxmax   = 240; // = rotation 0, 2
+            int16_t   _tsymax   = 320;
+            int16_t   _rot      = 2;
+            uint8_t   _ledpin   = 0;
+            uint8_t   _LED_ON   = 1;
+            uint8_t   _isinit   = FALSE;
+            uint8_t   _mode     = MD_DEF;
 
-  // parameters for menu
-      typedef enum MENU_ACT
+          public:
+            md_touch(Adafruit_ILI9341*    pTFT,
+                     XPT2046_Touchscreen* ptouch,
+                     md_TouchEvent*       ptouchev,
+                     uint8_t tft_LED, uint8_t led_ON, md_spiffs *pflash); //, uint8_t spi_bus = VSPI);
+            ~md_touch();
+
+            void start      (uint8_t rotation, uint8_t doTask = TRUE);
+            void wrText     (const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
+            void wrText     (String msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
+            void setRotation(uint8_t rotation);
+            void run        ();
+            void mapXY      (POINT_t* pPt);
+            void doCalibration();
+            uint8_t rotation();
+            void suspend();
+            void resume();
+
+          private:
+            void startTFT();
+            // calibration
+            void loadCalibration();
+            void checkCalibration();
+            void saveCalibration();
+        };
+  // --- menu control   // menu timing
+    // basics
+      #define MENU_TASK_SLEEP_US  10000ul
+      #define MENU4BIT_MASK      0x0000000Fu
+    // menu format
+      #define COL_BACK       MD_BLACK
+      #define BOX_GRID       20
+      #define BOX_X_MAX      12
+      #define BOX_Y_MAX      16
+      #define VAL_L_POS      1
+      #define VAL_L_SIZE     7
+      #define VAL_V_POS      VAL_L_POS + VAL_L_SIZE
+      #define VAL_V_SIZE     4
+      #define MENU_MAXLINES  BOX_Y_MAX - 2
+      #define MENU_TXTMAX    25
+      #define MENU_VALMAX    8
+      #define MENU_FONT      (&AT_BoldOblique9pt7b) // ArialRoundedMTBold_14
+      typedef enum MENU_ACTION : uint8_t
         {
           ACTNO = 0,
-          // PREV,
-          // NEXT,
           PREVPAGE,
           NEXTPAGE,
           HIDE,
           SHOW,
           DOIT,
           ACTMAX
-        } MENU_ACT_t;
-      #define MENU_TXTLEN 25
-      #define MENUTYPE_MAIN 0
-      #define MENUTYPE_PAGE 1
-      #define MENU_MAXLINES 8
-      #define MENU_FONT ArialRoundedMTBold_14
-    // colunm position
-      #define MEN_BUT_SIZE 24
-      #define MEN_COL1_X 5
-      #define MEN_COL_W 31
-      #define MEN_TITLE_X MENU_COL_W * 2 + MENU_COL1_X
-      #define MEN_TITLE_W MENU_COL_W * 5 + MENU_BUT_SIZE + MENU_TITLE_X
-      #define MEN_MENU_X  MENU_COL_W * 5 + MENU_COL1_X
-      #define MEN_MENU_W  MENU_COL_W * 3 + MENU_BUT_SIZE
-    // row positions
-      #define MEN_BUT1_Y 10
-      #define MEN_BUTROW_H 30
-      #define MEN_TITLE_Y 2
-      #define MEN_TITLE_H MENU_BUTROW_H + MENU_BUT1_Y - MEN_TITLE_Y
-      #define MEN_MENU1_Y MENU_BUTROW_H + MENU_BUT1_Y
-      #define MEN_MENU_H  MEN_BUT_SIZE
-      #define MEN_OUT1_Y  MENU_BUTROW_H + MENU_BUT1_Y
-      #define MEN_OUT_H MEN_BUT_SIZE
-
-  // --- tasks
-    // task control
-      #define TTASK_ON_RUN 0
-      #define TTASK_HSHAKE 1
-      #define TTASK_ON_HOLD 2
-      #define TTASK_NEWVAL TTASK_HSHAKE + TTASK_ON_HOLD
-  // --- classes
-    void handleTouch(void *pvParameters);
-    // void handleMenu(void * pvParameters);
-    // --- class tColors
-      class tColors
+        } MENU_ACTION_t;
+      typedef enum BOXCOMMODE_t : uint8_t
         {
-          private:
-            uint16_t _cols[4];
-
-          public:
-            tColors(void) {}
-            tColors(uint16_t colDef, uint16_t colSel, uint16_t colRdy, uint16_t colEme)
-              {
-                _cols[0] = colDef;
-                _cols[1] = colSel;
-                _cols[2] = colRdy;
-                _cols[3] = colEme;
-              }
-
-            void operator=(tColors p)
-              {
-                _cols[0] = p._cols[0];
-                _cols[1] = p._cols[1];
-                _cols[2] = p._cols[2];
-                _cols[3] = p._cols[3];
-              };
-
-            uint16_t cols(uint8_t mode = MD_DEF)
-              {
-                return _cols[mode];
-              }
-            void col(uint16_t color, uint8_t mode = MD_DEF)
-              {
-                _cols[mode] = color;
-              }
-        };
-
-    // --- class tBoxColors
-      class tBoxColors
+          COLMODE_BOXDEF = 0,
+          COLMODE_BOXSEL = 1,
+          COLMODE_BOXWRN = 2,
+          COLMODE_BOXEME = 3,
+          COLMODE_BOXMAX = 4,
+          COLMODE_BOXRDY
+        } BOXCOLMODE_t;
+    // menu colors
+      typedef struct COLORS_t
         {
-          private:
-            tColors _colbut = tColors(COL_BUT_DEF, COL_BUT_SEL, COL_BUT_RDY, COL_BUT_EME);
-            tColors _coltxt = tColors(COL_TXT_DEF, COL_TXT_SEL, COL_TXT_RDY, COL_TXT_EME);
-            uint8_t _colhide = COL_BACK;
+          md_colors coldef;
+          md_colors colsel;
+          md_colors colwrn;
+          md_colors coleme;
 
-          public:
-            tBoxColors(void) {}
-
-            void operator=(tBoxColors p)
-              {
-                _colbut = p._colbut;
-                _coltxt = p._coltxt;
-                _colhide = p._colhide;
-              };
-
-            uint16_t colBut(uint8_t mode = MD_DEF)
-              {
-                return _colbut.cols(mode);
-              }
-            void colBut(uint16_t color, uint8_t mode = MD_DEF)
-              {
-                _colbut.col(color, mode);
-              }
-            uint16_t colText(uint8_t mode = MD_DEF)
-              {
-                return _coltxt.cols(mode);
-              }
-            void colText(uint16_t color, uint8_t mode = MD_DEF)
-              {
-                _coltxt.col(color, mode);
-              }
-        };
-
-    // --- class tPoint
-      class tPoint
-        {
-          public:
-          tPoint(void) {}
-          tPoint(int16_t _x, int16_t _y) { set(_x, _y); }
-
-          bool operator==(tPoint p) { return ((p.x == x) && (p.y == y)); }
-          bool operator!=(tPoint p) { return ((p.x != x) || (p.y != y)); }
-          void operator+=(tPoint p)
+          md_colors col(uint8_t mode)
             {
-              x += p.x;
-              y += p.y;
+              switch (mode % 4)
+                {
+                  case 0: return coldef;
+                  case 1: return colsel;
+                  case 2: return colwrn;
+                  default: return coleme;
+                }
+              return coldef;
             }
-          void operator=(TS_Point p)
-            {
-              x = p.x;
-              y = p.y;
-            }
-
-          void set(int16_t _x, int16_t _y)
-            {
-              x = _x;
-              y = _y;
-            }
-          virtual char *print15(char *buf)
-            {
-              sprintf(buf, "x %4i y %4i", x, y);
-              return buf;
-            }
-
-          int16_t x = 0;
-          int16_t y = 0;
-        };
-
-    // --- class tText
-      class tText
+        } COLORS_t;
+    // menu colors
+      static COLORS_t  defBoxCols  = { MD_BLACK, MD_BLACK , MD_BLACK, MD_RED };
+      static COLORS_t  defTxtCols  = { MD_DARKGREEN, MD_ORANGE, MD_RED, MD_GREENYELLOW };
+      static COLORS_t* pdefBoxCols = &defBoxCols;
+      static COLORS_t* pdefTxtCols = &defTxtCols;
+  // --- text defines
+    // --- fonts
+      #define TXT_CHAR1_W 6
+      #define TXT_CHAR1_H 8
+    // --- alignment
+      #define TXT_LEFT    0
+      #define TXT_CENTER  1
+      #define TXT_RIGHT   2
+    // --- menu text
+      #define ITEM_TXT_MAXLEN_240 20
+      #define ITEM_TXT_MAXLEN_320 26
+      typedef struct MENUTEXT_t
         {
-          protected:
-            char *_text = NULL;
-            uint16_t _len = 0;
-            uint8_t _size = 2;
-            uint8_t _bpos = TXT_LEFT; // orientation
+          char*     ptext   = NULL;
+          uint16_t  txtlen  = 0;
+          int16_t   tx = 1,  ty = 1;  // pos text  [pixels abs]
+          uint16_t  tw = 10, th = 10; // size text [pixels rel]
+          uint8_t   txtsize = 2;      // font scale
+          uint8_t   align   = TXT_CENTER; // left - center - right
+          uint8_t   tlenmax = 0;
+          COLORS_t* ptxtcol = pdefTxtCols;
 
-          public:
-            tText() {}
-            ~tText()
-              {
-                if (_text != NULL)
-                  delete _text;
-              }
-
-            void setText(const char *pTxt);
-            void setText(String Text);
-            char *getText(char *pText);
-            void setLen(uint8_t len)
-              {
-                _len = len;
-              }
-            void setTextSize(uint8_t textSize)
-              {
-                _size = textSize;
-              }
-            uint8_t txtSize()
-              {
-                return _size;
-              }
-            void setOrient(uint8_t orient)
-              {
-                _bpos = orient;
-              }
-        };
-
-    // --- class tBox
-      class tBox
+          char* getText() { return ptext; }
+          void operator= (MENUTEXT_t t)
+            {
+              ptext   = t.ptext;
+              txtlen  = t.txtlen;
+              txtsize = t.txtsize;
+              align   = t.align;
+              ptxtcol = t.ptxtcol;
+            }
+        } MENUTEXT_t;
+  // --- struct ITEMID
+    // ItemID
+      /* ITEMID_t is an atomic bit coded value and
+       * contains all information for navigation and evaluation
+       * - atomic because it is used for inter task communucation
+       * Bits:
+       *   31-27 5 bits - 1. row    [unit grid]
+       *   26-22 5 bits - 1. column [unit grid]
+       *   21-19 3 bits - menu lev
+       *   18-14 5 bits - width [unit grid]
+       *   13-11 3 bits - item type
+       *        =7: reserved
+       *        =6: reserved
+       *        =5: reserved
+       *        =4: link
+       *        =3: input  value with edit link
+       *        =2: output value (type = valtype)
+       *        =1: in/out label
+       *        =0: text
+       *   10- 7 reserved
+       *    6- 2 menu status
+       *       6 req draw    0x10u
+       *       5 is selected 0x08u
+       *       4 has link    0x04u
+       *       3 selectable  0x02u
+       *       2 visable     0x01u
+       *    1- 0 color mode
+       *        =0: def   default
+       *        =1: sel   select
+       *        =2: wrn   warning
+       *        =3: eme   emergency
+       */
+      typedef enum CODE_MASK : uint32_t
         {
-          protected:
-            int16_t _x = 0; // position top/left
-            int16_t _y = 0; // position top/left
-            uint16_t _w = 10;
-            uint16_t _h = 10;
+          // screen position    - static => no clr
+            MENUSCR_MASK_ROW     = 0xF8000000u, // 5 bits 31-27 row [grid]
+            MENUSCR_MASK_COL     = 0x07C00000u, // 5 bits 26-22 column [grid]
+            MENUSCR_MASK_LEV     = 0x00380000u, // 3 bits 21-19 screen line all levels
+                MENLEV_ALL       = 7,
+            MENUSCR_MASK_COLS    = 0x0007C000u, // 5 bits 18-14 width [grid]
+            MENUSCR_SHIFT_ROW    = 27,
+            MENUSCR_SHIFT_COL    = 22,
+            MENUSCR_SHIFT_LEV    = 19,
+            MENUSCR_SHIFT_COLS   = 14,
+          // item type
+            MENUTYP_MASK_ITEM    = 0x00003800u, // bits  13-11
+            MENUSCR_SHIFT_TYP    = 11,
+                MENVAL_RES7      = 7, // reserved
+                MENVAL_RES6      = 6, // reserved
+                MENVAL_BITMAP    = 5, // bitmap
+                MENVAL_LINK      = 4, // link
+                MENVAL_INPLINK   = 3, // input & link (type VAL)
+                MENVAL_OUTVAL    = 2, // out value (type VAL)
+                MENVAL_IOLABEL   = 1, // I/O label
+                MENVAL_TTEXT     = 0, // text
+          // value type
+            MENUTYP_MASK_VAL     = 0x0000060u, // bits  10-9
+            MENUSCR_SHIFT_VAL    = 9,
+                MENVAL_UNDEF     = 3, // not used
+                MENVAL_INT       = 2, // integer
+                MENVAL_FLOAT     = 1, // float
+                MENVAL_VTEXT     = 0, // text
+          // reserved
+            MENUMOD_MASK_RES     = 0x00000100u, // reserved bit 8
+            MENUSCR_SHIFT_RES    = 8,
+          // menu status
+            MENUMOD_MASK_STAT    = 0x000000FBu, // bits  6- 3 screen line in main menu level 3
+            MENUMOD_SHIFT_MENU   = 2,
+                MENBIT_DOUBLE    = 32,// bit 7  is double clicked
+                MENBIT_TODRAW    = 16,// bit 6  is to be displayed
+                MENBIT_ISSEL     = 8, // bit 5  selected - provided for decoding
+                MENBIT_HASLINK   = 4, // bit 4  active   - provided for decoding
+                MENBIT_TOSEL     = 2, // bit 3  selectable provided for decoding
+                MENBIT_ISVIS     = 1, // bit 2  visible
+                MENBIT_NO        = 0,
+          // colmode
+            MENUMOD_MASK_COLOR   = 0x00000003u, // bits  1-0 screen line in main menu level 3
+            MENUMOD_SHIFT_COLOR  = 0,
+                MENVAL_MODEME    = 3,
+                MENVAL_MODWRN    = 2,
+                MENVAL_MODSEL    = 1,
+                MENVAL_MODDEF    = 0
+        } CODE_MASK_t;
+                                                // screen define masks
+      typedef struct ITEMID_t
+        {
+          uint8_t scrrow  = 1; // 5 bits - screen row    grid [0 - SCRROW_MAX]
+          uint8_t scrcol  = 1; // 5 bits - screen column grid [0 - SCRCOL_MAX]
+          uint8_t menlev  = 0; // 3 bits - menu level
+          uint8_t itemw   = BOX_X_MAX; // 5 bits - item width    grid [0 - SCRCOL_MAX]
+          uint8_t itemtyp = 0; // 3 bits - item type
+          uint8_t valtyp  = 0; // 2 bits - value type
+          uint8_t menstat = MENBIT_TODRAW; // 8 bits - menu act status
+          uint8_t colmod  = 0; // 2 bits - color work mode [0..3]
 
+          uint32_t itemID()
+            {
+              return (  (scrcol<<MENUSCR_SHIFT_COL)   + (scrrow<<MENUSCR_SHIFT_ROW)
+                      + (itemw<<MENUSCR_SHIFT_COLS)   + (menlev<<MENUSCR_SHIFT_LEV)
+                      + (itemtyp<<MENUSCR_SHIFT_TYP)  + (valtyp<<MENUSCR_SHIFT_VAL)
+                      + (menstat<<MENUMOD_SHIFT_MENU) + (colmod<<MENUMOD_SHIFT_COLOR)
+                     );
+            }
+          void operator=(uint32_t id)
+            {
+              S2HEXVAL(" = colmod itemid ", colmod, itemID());
+              colmod  = (uint8_t) (id & MENUMOD_MASK_COLOR) >> MENUMOD_SHIFT_COLOR;
+              S2HEXVAL(" = colmod itemid ", colmod, itemID());
+              menstat = (uint8_t) (id & MENUMOD_MASK_STAT)  >> MENUMOD_SHIFT_MENU;
+              menlev  = (uint8_t) (id & MENUSCR_MASK_LEV)   >> MENUSCR_SHIFT_LEV;
+              valtyp  = (uint8_t) (id & MENUTYP_MASK_VAL)   >> MENUSCR_SHIFT_VAL;
+              itemtyp = (uint8_t) (id & MENUTYP_MASK_ITEM)  >> MENUSCR_SHIFT_TYP;
+              itemw   = (uint8_t) (id & MENUSCR_MASK_COLS)  >> MENUSCR_SHIFT_COLS;
+              scrcol  = (uint8_t) (id & MENUSCR_MASK_COL)   >> MENUSCR_SHIFT_COL;
+              scrrow  = (uint8_t) (id & MENUSCR_MASK_ROW)   >> MENUSCR_SHIFT_ROW;
+            }
+        } ITEMID_t;
+  // --- class md_menu
+    // menu item
+      class MENUITEM_t : public md_cell //: public tBox, public tBoxColors, public tText, public cItemID //, public md_cell
+        {
           public:
-            tBox() {}
-            tBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
-              {
-                setPos(x, y);
-                setSize(w, h);
-              }
+            POINT_t    boxpos;
+            POINT_t    boxsize;
+            COLORS_t*  pboxcols;
+            MENUTEXT_t boxtext;
+            ITEMID_t   menuid;
+            uint8_t    maxtxtlen;
 
-            void setBox(int16_t x, int16_t y, uint16_t w, uint16_t h)
+            char*   printbox(char *p)
               {
-                _x = x;
-                _y = y;
-                _w = w;
-                _h = h;
-              }
-            void setPos(int16_t x, int16_t y)
-              {
-                _x = x;
-                _y = y;
-              }
-            void setSize(uint16_t w, uint16_t h)
-              {
-                _w = w;
-                _h = h;
-              }
-            int16_t  x() { return _x; }
-            int16_t  y() { return _y; }
-            uint16_t w() { return _w; }
-            uint16_t h() { return _h; }
-            char *printbox(char *p)
-              {
-                sprintf(p, "%3i %3i %3i %3i", _x, _y, _w, _h);
+                sprintf(p, "%3i %3i %3i %3i", boxpos.x, boxpos.y, boxsize.x, boxsize.y);
                 return p;
               }
-
-            void operator=(tBox p)
+            void    wrText()
               {
-                _x = p.x();
-                _y = p.y();
-                _w = p.w();
-                _h = p.h();
+                //SVAL(" .. wrText ", boxtext.ptext);
+                menuid.menstat |= MENBIT_TODRAW;
+                //SHEXVAL("    wrText menstat ", menuid.menstat);
+              }
+            void    operator=(MENUITEM_t b)
+              {
+                boxpos    = b.boxpos;
+                boxsize   = b.boxsize;
+                pboxcols  = b.pboxcols;
+                boxtext   = b.boxtext;
+                menuid    = b.menuid;
+                maxtxtlen = b.maxtxtlen;
               };
-        };
-
-    // --- class tButton_def
-      /* tButtondef is an atomic bit coded value and
-       * contains all information for navigation and evaluation
-       * Bits:
-       *   31-28 screen column
-       *         col 1,2   witches for output (20), output (140)
-       *         col 3     titel (130 size 2/3)
-       *         col 5     main screen, menu
-       *         col 9,10  menu control buttons
-       *   27-24 screen line in main menu level 3
-       *   23-20 screen line in main menu level 2
-       *   19-16 screen line in main menu level 1
-       *   15-12 screen line in main menu level 0
-       *   11- 4 reserved
-       *    3- 0 menu status bits
-       *         3(,1-0) selected
-       *         2(,0)   touchable
-       *         1(-0)   selectable
-       *         0       visible
-       */
-      class tButton_def // 0b cccc LLLL UUUU llll uuuu .... .... ..va
+            uint8_t isItem(POINT_t *p)
+              {
+                if (   (p->x < boxpos.x) || (p->x > (boxpos.x + boxsize.x))
+                    || (p->y < boxpos.y) || (p->y > (boxpos.y + boxsize.y)))
+                  {
+                    return FALSE;
+                  }
+                return TRUE;
+              }
+        } ;
+      typedef uint32_t ITEMCNT_t ; // 4 bit m3: <<12, m2: <<8, m1: <<4, m0
+    // class md_menu
+      class md_menu     // home made
         {
-          protected:
-            uint32_t _id = 0;
-
+          private:
+            md_list*     _pMenu      = NULL;
+            POINT_t      _backpos;
+            POINT_t      _backsize;
+            uint8_t      _actMenu    = 0; // def main menu
+            uint8_t      _isInit     = FALSE;
           public:
-            tButton_def() {}
-            ~tButton_def() {}
+            md_menu();
+            ~md_menu();
 
-            void setID(uint32_t id)
-              {
-                _id = id;
-              }
-            void setAct(uint8_t active, uint8_t bitonly = FALSE) //  can be touched
-              {
-                if (!active) { _id &= !MENACT_BIT;  return; }
-                if (bitonly) { _id |=  MENACT_BIT;  }
-                else         { _id |=  MENACT_MASK; }
-              }
-            void setVis(uint8_t visible) // is visible
-              {
-                if (visible) { _id |= MENVIS_BIT; }
-                else         { _id &= MENVIS_BIT; }
-              }
-            void setCol(uint8_t column) //  column of screen
-              {
-                _id = (_id & MENCOL_MASK) | ((column %16) << MENCOL_SHIFT);
-              }
-            void setMenu(uint16_t menuhex) // menu position - menu 0 = main menu
-              {
-                //_id |= (_id & 0xF0000FFF) | (menuhex << 12);
-                _id =   (_id & !LINLEVS_MASK)
-                      | (menuhex << LINLEVS_SHIFT);
-              }
-            void setMenu(uint8_t menu0, uint8_t menu1,uint8_t menu2,uint8_t menu3) // menu position - menu 0 = main menu
-              {
-                _id =   (_id & !LINLEVS_MASK)
-                      | ((menu3 % 16) << LINLEV3_SHIFT)
-                      | ((menu2 % 16) << LINLEV2_SHIFT)
-                      | ((menu1 % 16) << LINLEV1_SHIFT)
-                      | ((menu0 % 16) << LINLEV0_SHIFT) ;
-              }
-            uint32_t id()
-              {
-                return _id;
-              }
-            uint8_t isAct()
-              {
-                //return (uint8_t)_id & 0x00000001;
-                return (uint8_t) _id & MENACT_BIT;
-              }
-            uint8_t isVis()
-              {
-                //return (uint8_t)_id & 0x00000002;
-                return (uint8_t)_id & MENVIS_BIT;
-              }
-            uint8_t col()
-              {
-                //return (uint8_t)((_id & 0xF0000000) >> 28);
-                return (uint8_t)((_id & MENCOL_MASK) >> MENCOL_SHIFT);
-              }
-            uint8_t m0()
-              {
-                //return (uint8_t)((_id & LINLEV0_MASK) >> 24);
-                return (uint8_t)((_id & LINLEV0_MASK) >> LINLEV0_SHIFT);
-              }
-            uint8_t m1()
-              {
-                //return (uint8_t)((_id & 0x00F00000) >> 20);
-                return (uint8_t)((_id & LINLEV1_MASK) >> LINLEV1_SHIFT);
-              }
-            uint8_t m2()
-              {
-                //return (uint8_t)((_id & 0x000F0000) >> 16);
-                return (uint8_t)((_id & LINLEV2_MASK) >> LINLEV2_SHIFT);
-              }
-            uint8_t m3()
-              {
-                //return (uint8_t)((_id & 0x0000F000) >> 12);
-                return (uint8_t)((_id & LINLEV3_MASK) >> LINLEV3_SHIFT);
-              }
-            uint16_t menu()
-              {
-                //return (uint16_t)((_id & 0x0FFFF000) >> 12);
-                return (uint16_t)((_id & LINLEVS_MASK) >> LINLEVS_SHIFT);
-              }
+            void init     (md_list* pMenu, MENUITEM_t* pTitle, MENUITEM_t* pStatus);
+            void begin    (uint8_t doTask = TRUE);
+            void wrStatus (const char *msg = NULL, uint16_t msTOut = 10, uint8_t colormode = MD_DEF);
+            void wrStatus (String msg, uint16_t msTOut = 10, uint8_t colormode = MD_DEF)
+              { wrStatus(msg.c_str(), msTOut, colormode); }
+            void wrTitle  (const char *msg = NULL, uint8_t colormode = MD_SEL);
+            void wrTitle  (String msg, uint8_t colormode = MD_SEL)
+              { wrTitle(msg.c_str(), colormode); }
+            void run();
+            void show(MENUITEM_t* pitem = NULL, uint8_t maxWidth = FALSE);
+            void wrback();
+            MENUITEM_t* getItem(POINT_t* ptouchP);
+
+
+            void drawEntry();
+            void suspend();
+            void resume();
         };
-
-    // --- class tButton
-      class tButton : public tBox, public tBoxColors, public tText, public tButton_def, public md_cell
-        {
-          protected:
-            uint8_t _mode = MD_DEF;
-            tBoxColors _cols;
-
-          public:
-            tButton() {}
-            tButton(int16_t x, int16_t y, uint16_t w, uint16_t h) {}
-
-            void show();
-            void show(uint8_t mode)
-              {
-                _mode = mode;
-                show();
-              }
-            void hide();
-
-            void defPos(int16_t x, int16_t y, uint16_t w, uint16_t h)
-              {
-                setPos(x, y);
-                setSize(w, h);
-              }
-
-            void setup(uint16_t menuhex, uint8_t col )
-              {
-                uint8_t row = menuhex % 4;
-
-              }
-            // tButton_def: void setMenu(uint8_t menu0, uint8_t menu1,uint8_t menu2,uint8_t menu3) // menu position - menu 0 = main menu
-            // tButton_def: void setMenu(uint16_t hexmenu ) // 0x3210
-            // tText:       void setText(const char *pTxt);
-            // tText:       void setText(String Text);
-            // tButton_def: void setID(uint32_t id)
-            // tButton_def: void setAct(uint8_t active) //  can be touched
-            // tButton_def: void setVis(uint8_t visible) // is visible
-            // tButton_def: void setCol(uint8_t column) //  column of screen
-
-        };
-
+  // --- calibration
+    // basics
+      #define TCAL_FILE_0   "/Touchtest_0.dat"
+      #define TCAL_FILE_1   "/Touchtest_1.dat"
+      #define TCAL_FILE_2   "/Touchtest_2.dat"
+      #define TCAL_FILE_3   "/Touchtest_3.dat"
+      #define TCAL_FILE_DEF TCAL_FILE_2
+      #define TCAL_ROT_DEF  2   // SD right hand side
     // --- class calData
-      class calData_t
+      class md_tcalData
         {
+          private:
+            uint16_t _xmin = 230;
+            uint16_t _ymin = 350;
+            uint16_t _xmax = 3700;
+            uint16_t _ymax = 3900;
           public:
-            uint16_t xmin = 230;
-            uint16_t ymin = 350;
-            uint16_t xmax = 3700;
-            uint16_t ymax = 3900;
-            tPoint x0y0 = {10, 10};
-            tPoint x0y1 = {10, 310};
-            tPoint x1y0 = {230, 10};
-            tPoint x1y1 = {230, 310};
+            /*
+                tPoint x0y0 = {10, 10};
+                tPoint x0y1 = {10, 310};
+                tPoint x1y0 = {230, 10};
+                tPoint x1y1 = {230, 310};
+             */
+            md_tcalData()  {}
+            ~md_tcalData() {}
 
-            void setCalib(uint16_t _xmin, uint16_t _ymin, uint16_t _xmax, uint16_t _ymax)
-              {
-                xmin = _xmin; xmax = _xmax;
-                ymin = _ymin; ymax = _ymax;
+            void setCalib(uint16_t xmin, uint16_t ymin, uint16_t xmax, uint16_t ymax)
+              { _xmin = xmin; _xmax = xmax; _ymin = ymin; _ymax = ymax; }
+            void  setxmin(uint16_t xmin) {
+              SVAL(" setxmin ", xmin);
+              _xmin = xmin; }
+            void  setymin(uint16_t ymin) { _xmin = ymin; }
+            void  setxmax(uint16_t xmax) { _xmax = xmax; }
+            void  setymax(uint16_t ymax) { _ymax = ymax; }
+            uint16_t xmin()  { return _xmin; }
+            uint16_t ymin()  { return _ymin; }
+            uint16_t xmax()  { return _xmax; }
+            uint16_t ymax()  { return _ymax; }
+            /*
+                virtual char *printPts56(char *pcalData)
+                  {
+                    sprintf(pcalData, "points P00 %3i %3i P01 %3i %3i P10 %3i %3i P11 %3i %3i",
+                            x0y0.x(), x0y0.y(), x0y1.x(), x0y1.y(),
+                            x1y0.x(), x1y0.y(), x1y1.x(), x1y1.y());
+                    return pcalData;
               }
-            virtual char *printPts56(char *pcalData)
-              {
-                sprintf(pcalData, "points P00 %3i %3i P01 %3i %3i P10 %3i %3i P11 %3i %3i",
-                        x0y0.x, x0y0.y, x0y1.x, x0y1.y, x1y0.x, x1y0.y, x1y1.x, x1y1.y);
-                return pcalData;
-              }
-            char *printCal50(char *pcalVals)
+             */
+            char* printCal50(char *pcalVals)
               {
                 sprintf(pcalVals, "calPos xmin %4i ymin %4i xmax %4i ymax %4i",
-                        xmin, ymin, xmax, ymax);
+                        _xmin, _ymin, _xmax, _ymax);
                 return pcalVals;
               }
         };
+  // --- tasks
+    // task control
+      #define TTASK_ON_RUN  0
+      #define TTASK_HSHAKE  1
+      #define TTASK_ON_HOLD 2
+      #define TTASK_NEWVAL TTASK_HSHAKE + TTASK_ON_HOLD
+    // --- event handlers for touch & menu
+      void IRAM_ATTR touchTask (void *pvParameters);
+      void IRAM_ATTR menuTask  (void * pvParameters);
 
-    // --- class md_touch
-      class md_touch    // public Adafruit_ILI9341, public XPT2046_Touchscreen,
-        {
-          private:
-            int8_t  _iscal = MD_UNDEF;
-            uint8_t _ledpin = 0;
-            uint8_t _LED_ON = 1;
-            tButton _statbox;
+  extern MENUITEM_t itemTitel;
+  extern MENUITEM_t itemStatus;
 
-          public:
-            md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST,
-                     uint8_t tft_LED, uint8_t led_ON); //, uint8_t spi_bus = VSPI);
-            ~md_touch();
-
-            void start      (uint8_t rotation, uint16_t background = MD_BLACK);
-            void wrStatus   (const char *msg, uint8_t mode = MD_DEF);
-            void wrStatus   (String msg, uint8_t mode = MD_DEF);
-            void wrText     (const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
-            void wrText     (String msg, uint8_t spalte, uint8_t zeile, uint8_t len); // write to text area
-            void setRotation(uint8_t rotation);
-            void run        ();
-            uint8_t rotation();
-
-          private:
-            void startTFT();
-            void startStatus();
-            // calibration
-            void loadCalibration();
-            void doCalibration();
-            void checkCalibration();
-            void saveCalibration();
-        };
-    // --- class tList
-      class tList : public md_list
-        {
-          private:
-            uint8_t  _iscal = false;
-            uint32_t _actid = 0;
-
-          public:
-            tList() {}
-            ~tList() {}
-
-            void append();
-            void remove();
-        };
-
-  //--- class md_menu
-  /* --- menu    brief description ---
-      a menu is realized with a linked list structure taking dynamic
-      heap memory on startup that containes the menu texts
-      no semaphores are used because
-      - configuration is done before task is started
-      - an 2 atomic uint32_t values are used to
-        1) control the menu position and
-        2) read the touch value.
-        - one side only sets a value when read a 0
-        - the other side resets the value when the value was ready
-          and the work was done
-
-      atomic 'output', 'control' values
-      - both values are designed to be used as 4 uint8_t values
-      - each value has 4 bits for both old (=actual) and new (=desired) value
-      - this means every value has 15 possible values
-        15 pages, 15 columns, 15 entries, 15 actions
-
-      - 'action' type MENU_ACT_t -> UP, DOWN, PREVPAGE, NEXTPAGE, DOIT ...
-          new = (uint8_t) ( 'output' & 0x0000 000F       )
-          old = (uint8_t) (('output' & 0x0000 00F0) >>  4)
-      - 'entry'  uint8_t [0..15]
-          new = (uint8_t) ( 'output' & 0x0000 0F00      8)
-          old = (uint8_t) (('output' & 0x0000 F000) >> 12)
-      - 'page'   uint8_t [0..15]
-          new = (uint8_t) ( 'output' & 0x000F 0000     16)
-          old = (uint8_t) (('output' & 0x00F0 0000) >> 20)
-      - 'level'  uint8_t [0..15]
-          new = (uint8_t) (('output' & 0x0F00 0000) >> 24)
-          old = (uint8_t) (('output' & 0xF000 0000) >> 28)
-
-      function
-      - moving inside menu
-        - on exit
-          - no exit action define  => done automatically
-          - otherwise              => interrupt main program
-        - on entry
-          - no entry action define => done automatically
-          - otherwise              => interrupt main program
-    */
-
-#endif
-
-#ifdef PARKEN
-  typedef enum MENU_ACT
-  {
-    ACTNO = 0,
-    // PREV,
-    // NEXT,
-    PREVPAGE,
-    NEXTPAGE,
-    HIDE,
-    SHOW,
-    DOIT,
-    ACTMAX
-  } MENU_ACT_t;
-
-  #define MENU_TXTLEN 25
-  #define MENUTYPE_MAIN 0
-  #define MENUTYPE_PAGE 1
-  #define MENU_MAXLINES 8
-  #define MENU_FONT ArialRoundedMTBold_14
-#endif // PARKEN
+#endif // _MD_TOUCH_H_

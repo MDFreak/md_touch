@@ -1,561 +1,4 @@
 #ifndef NOTREADY
-// --- includes
-  #include <md_touch.h>
-  #include <md_spiffs.h>
-  #include <string>
-  #include <ArialRounded.h>
-  #include <md_defines.h>
-
-// --- globals
-  static XPT2046_Touchscreen *_ptouch   = NULL;
-  static Adafruit_ILI9341    *_pTFT     = NULL;
-  static md_touch            *_pmdtouch = NULL;
-  static md_TouchEvent       *_ptouchev = NULL;
-  static md_spiffs           *pConf     = new md_spiffs();
-  static calData_t           *pCal      = NULL;
-  static int8_t              _rotation  = 3;
-  static uint16_t            _COL_BACK  = MD_BLACK;
-  static TaskHandle_t        _touchTask = NULL;
-  static uint32_t            _hTcount   = 0;
-
-  // atomic communication with touch task
-    // task wr    / extern rd
-      static uint32_t        _tactRaw   = 0;    // last touched point (raw type)
-      static uint32_t        _tactXY    = 0;    // last touched point (TFT converted)
-    // task rd+wr / extern rd+wr  =  handshake
-      static int8_t          _tCtrl     = TTASK_ON_RUN;    // ext  TTASK_ON_RUN:  handshake off
-                                                           // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
-                                                           // ext  TTASK_ON_HOLD: touch on hold
-                                                           // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
-    // extern wr  / task rd
-      static uint32_t        _tWait_us  = 10000; // task time tick (minimum = 1000 ~ 1 msec)
-
-
-  //static TaskHandle_t menuTask_  = NULL;
-
-// task touchTask
-  void IRAM_ATTR handleTouch(void * pvParameters)
-    {
-      boolean   tch;
-      TS_Point  raw;
-      TS_Point  p;
-      unsigned long lastWD, actWD, diff;
-
-      //esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
-      //esp_task_wdt_add(NULL); //add current thread to WDT watch
-      lastWD = millis();
-
-      while(true)  // endless loop
-        {
-          actWD = millis();
-          diff  = actWD - lastWD;
-          if (diff > 1000)
-            {
-              lastWD = actWD;
-              //esp_task_wdt_reset();
-                //SOUT("cycle "); SOUT((uint32_t) actWD*1000/count); SOUT(" "); SOUTLN(count);
-                //count = 0;
-            }
-          if (_tCtrl < TTASK_ON_HOLD) // only poll, if touch is released from extern
-            {
-              tch = _ptouchev->getTouchPos(&p, &raw);
-              if (tch)
-                {
-                  if (_hTcount < 1)
-                    {
-                      _hTcount++;
-                      if (raw.x < 0) raw.x = 0;
-                      if (raw.y < 0) raw.y = 0;
-                      if (p.x < 0) p.x = 0;
-                      if (p.y < 0) p.y = 0;
-                      _tactRaw = (raw.x << 16) + raw.y;
-                      _tactXY  = (p.x << 16) + p.y;
-                      SOUT(actWD); SOUT(" "); SOUT(_hTcount); SOUT(" ttask "); SOUT(p.x); SOUT("/"); SOUT(p.y); SOUT(" "); SOUTHEXLN(_tactXY);
-                    }
-                  else
-                    {
-                      if (_hTcount < 25) {_hTcount++;  }
-                      else            {_hTcount = 0;}
-                      //SOUT(actWD); SOUT(" "); SOUTLN(_hTcount);
-                    }
-                }
-            }
-          //count++;
-          usleep(_tWait_us);
-        }
-               /*if (pts_->isTouching())
-                  {
-                    SOUTLN("screen touched ");
-                    pts_->getPosition(x, y);
-                    SOUT("position x"); SOUT(x); SOUT(", y "); SOUTLN(y);
-                      //delay(30);
-                      //pts->readData(&x, &y, &z);
-                      //SOUT("x, y, z "); SOUT(x); SOUT(", "); SOUT(y); SOUT(", "); SOUTLN(z);
-                    //pts->isrWake = false;
-                  }
-                 */
-    }
-
-  void startTouchTask()
-    {
-      xTaskCreatePinnedToCore(
-                          handleTouch,           /* Task function. */
-                          "touchTask",           /* name of task. */
-                          10000,                 /* Stack size of task */
-                          NULL,                  /* parameter of the task */
-                          4 | portPRIVILEGE_BIT, /* priority of the task */
-                          &_touchTask,           /* Task handle to keep track of created task */
-                          0              );      /* pin task to core 0 */
-      SOUTLN("touchTask started on core 0");
-    }
-// task menuTask
-
-// --- class tColors
-// --- class tBoxColors
-// --- class tPoint
-// --- class tText
-  void tText::setText(const char* pTxt)
-    {
-      //SOUT(" setText .. "); SOUT(pTxt); SOUT(" "); SOUT(_len);
-      if (_text != NULL) delete _text;
-      _text=new char[_len+1];
-      memcpy( _text, (char*) pTxt, _len);
-      _text[_len]=0;
-      //SOUT(" neu "); SOUTLN(_text);
-    }
-
-  void  tText::setText(String Text)
-    {
-        setText(Text.c_str());
-    }
-
-  char* tText::getText(char* pText)
-    {
-      memcpy(pText, _text, sizeof(_text));
-      return pText;
-    }
-
-// --- class tBox
-// --- class tButton
-  void tButton::show()
-    {
-      uint8_t  len;
-      int16_t  x = _x;
-      int16_t  y = _y;
-      uint16_t w, h;
-      _pTFT->fillRoundRect(_x, _y, _w, _h, 2, _cols.colBut(_mode));
-      _pTFT->setTextSize(_size);
-      h = _size * TXT_CHAR1_H;  // hight of 1 char
-      w = _size * TXT_CHAR1_W;  // width of 1 char
-      len = _w / w;      // max count of char
-      if (strlen(_text) < len)
-        {
-          len = strlen(_text);
-        }
-      else
-        {
-          _text[len] = 0;
-        }
-      w = w * len;
-      y++;
-      if (h < _h) { y = _y + (_h - h) / 2; }
-      x++; // pos +1 in window
-      switch(_bpos)
-        {
-          case TXT_CENTER:
-            if (_w > w) { x += (_w - w) / 2; }
-            break;
-          case TXT_RIGHT:
-            if (_w > w) { x += (_w - w) - 2; }
-            break;
-          default: // TXT_LEFT
-            break;
-        }
-      _pTFT->setCursor(x, y);
-      _pTFT->setTextColor(_cols.colText(_mode));
-            //SOUT(" show "); SOUTLN(_text);
-      _pTFT->print(_text);
-    }
-
-  void tButton::hide()
-    {
-      _pTFT->fillRoundRect(_x, _y, _w, _h, 2, _COL_BACK);
-      this->setVis(false);
-    }
-
-// --- class calData
-// --- class md_touch
-  // construtors
-  	md_touch::md_touch(uint8_t cspin, uint8_t tft_CS, uint8_t tft_DC,  uint8_t tft_RST,
-                                                      uint8_t tft_LED, uint8_t led_ON) //, uint8_t spi_bus)
-      {
-        _pmdtouch = this;
-        _pTFT     = new Adafruit_ILI9341(tft_CS, tft_DC, tft_RST);
-        _ptouch   = new XPT2046_Touchscreen(cspin);
-        _ptouchev = new md_TouchEvent(_ptouch);
-        _ledpin  = tft_LED;
-        _LED_ON   = led_ON;
-      }
-
-    md_touch::~md_touch()
-      {
-        _pmdtouch = NULL;
-      }
-
-  // public implementation
-    void md_touch::wrStatus(const char* msg, uint8_t mode)
-      {
-        _statbox.setText(msg);
-        usleep(200000);
-        _statbox.show(mode);
-        usleep(200000);
-      }
-
-    void md_touch::wrStatus(String msg, uint8_t mode)
-      {
-        wrStatus(msg.c_str(), mode);
-      }
-
-    void md_touch::wrText(const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len)
-      {
-      }
-
-    void md_touch::wrText(String msg, uint8_t spalte, uint8_t zeile, uint8_t len)
-      {
-        wrText(msg.c_str(), spalte, zeile, len);
-      }
-
-    void md_touch::setRotation(uint8_t rotation)
-      {
-        _rotation = rotation;
-      }
-
-    uint8_t md_touch::rotation()
-      {
-        return _rotation;
-      }
-
-    void md_touch::run()
-      {
-
-      }
-  // protected implementation
-    void md_touch::start(uint8_t rotation, uint16_t background)
-      {
-        _rotation = rotation;
-        _COL_BACK = background;
-        char buf[50];
-        // start TFT
-        startTFT();
-        // install status window
-        startStatus();
-        // start touch
-             #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                SOUTLN(" .. md_touch .. start touch");
-              #endif
-        _ptouch->begin();
-        _ptouch->setRotation(_rotation);
-        _ptouchev->setResolution(_pTFT->width(),_pTFT->height());
-        _ptouchev->setDrawMode(false);
-            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                SOUTLN("             .. load calibration .. ");
-              #endif
-        // load and check calibration
-        loadCalibration();
-        switch (_iscal)
-          {
-            case MD_RDY:
-                wrStatus("Kalibrierung gefunden", MD_SEL);
-                //sleep(1);
-                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                    SOUTLN("             .. load calibration ok ");
-                  #endif
-              break;
-            case MD_SEL:
-                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                    SOUTLN("             .. check and save calib ");
-                  #endif
-                doCalibration();
-              break;
-            default:
-                #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                    SOUTLN("             .. is to be calibrated");
-                  #endif
-                doCalibration();
-              break;
-          }
-        startTouchTask();
-      }
-
-    void md_touch::startTFT()
-      {
-            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                SOUTLN(" .. md_touch .. start tft");
-              #endif
-        pinMode(_ledpin, OUTPUT);
-        digitalWrite(_ledpin, _LED_ON); // switch on backlight
-        _pTFT->begin();
-        _pTFT->setRotation(_rotation);
-        _pTFT->fillScreen(MD_GREEN);
-        usleep(200000);
-        _pTFT->fillScreen(_COL_BACK);
-      }
-
-    void md_touch::startStatus()
-      {
-            #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                SOUTLN(" .. md_touch .. start status window");
-              #endif
-        _statbox.setBox(STAT_X, STAT_Y, STAT_W, STAT_H);
-        _statbox.setTextSize(STAT_SIZE);
-        //_statbox.setTextSize(1);
-        _statbox.setOrient(STAT_ORIENT);
-        _statbox.setLen(44);
-        _statbox.setText("Herzlich Willkommen");
-        _statbox.show();
-        sleep(1);
-        _statbox.hide();
-      }
-
-    void md_touch::loadCalibration()
-      {
-        uint16_t a,b,c,d;
-        uint8_t  res;
-        char buf[60];
-        if (pCal != NULL) { delete pCal; pCal = NULL;}
-        pCal = new calData_t(); // to be deleted after calibration
-        pConf->init(pConf);
-        _iscal = MD_UNDEF;
-        SOUTLN(" .. read /tcalib.dat or /conf.dat");
-
-        if (pConf->exists("/tcalib.dat"))
-          {
-            res = pConf->readFile("/tcalib.dat", 40, buf);
-            if (res == ESP_OK)
-              {
-                SOUT(" .. '/tcalib' found "); SOUTLN(buf);
-                sscanf(&buf[0], "%3i %3i %4i %4i", &a, &b, &c, &d);
-                _iscal = MD_RDY;
-              }
-          }
-        else if ((_iscal == MD_UNDEF) && (pConf->exists("/conf.dat")))
-          {
-            res = pConf->readFile("/conf.dat", 40, buf);
-            if (res == ESP_OK)
-              {
-                SOUT(" .. '/conf' found "); SOUTLN(buf);
-                sscanf(&buf[0], "%3i %3i %4i %4i", &a, &b, &c, &d);
-                _iscal = MD_SEL;
-              }
-          }
-        else
-          {
-            _iscal = MD_DEF;
-          }
-
-        if (_iscal > MD_DEF)
-          {
-            pCal->setCalib(a, b, c, d);
-          }
-
-              #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-                  SOUTLN(pCal->printCal50(buf));
-                #endif
-        pConf->end();
-        _ptouchev->calibrate(pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
-      }
-
-    void md_touch::checkCalibration()
-      {
-        if (!pCal) { loadCalibration(); }
-      }
-
-    void md_touch::doCalibration()
-      {
-        calData_t rawP, calP;
-        int16_t   xpos = 1;
-        int16_t   ypos = 10;
-        int16_t   xmax, ymax;
-        boolean   tch;
-        int16_t   wx, wy;
-        uint16_t  ww, wh;
-        TS_Point  raw;
-        TS_Point  p;
-        int16_t   butCal[4]  = {70,  160, 70, 32};
-        int16_t   butExit[4] = {145, 160, 55, 32};
-        bool      doExit     = false;
-        char      text[60];
-
-        if (!pCal)
-          {
-            SOUTLN(" doCal  !!! no cal struct !!!");
-            loadCalibration();
-          }
-
-        _pTFT->setTextSize(1);
-        uint8_t i = _rotation % 4;
-        switch (i) // set max limits
-          {
-            case 0:  xmax = 240; ymax = 320; break;
-            case 1:  xmax = 320; ymax = 240; break;
-            case 2:  xmax = 240; ymax = 320; break;
-            default: xmax = 320; ymax = 240; break;
-          }
-        _pTFT->setRotation(i);
-
-        for ( i = 0; i < 4 ; i++ )  // draw calibrations points
-          {
-            switch (i)
-              {
-                case 0:
-                  xpos = 10; //
-                  ypos = 10;
-                  wx   = 10;
-                  wy   = 5;
-                  break;
-                case 1:
-                  xpos = xmax -10;
-                  ypos = 10;
-                  wx   = -60;
-                  wy   = 5;
-                  break;
-                case 2:
-                  xpos = 10;
-                  ypos = ymax -10;
-                  wx   = 10;
-                  wy   = -10;
-                  break;
-                default:
-                  xpos = xmax - 10;
-                  ypos = ymax - 10;
-                  wx   = -60;
-                  wy   = -10;
-                  break;
-              }
-            _pTFT->drawRoundRect( xpos, ypos, 3, 3, 1, ILI9341_YELLOW);
-            sprintf(text,"%i / %i", xpos, ypos);
-            xpos += wx;
-            ypos += wy;
-            _pTFT->setCursor(xpos, ypos);
-            _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-            _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-            _pTFT->print(text);
-          }
-
-              SOUTLN("draw buttons");
-          _pTFT->setTextSize(2);
-          _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
-          //_pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
-          _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
-          _pTFT->setTextColor(MD_YELLOW);
-          _pTFT->print("Calib");
-          _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
-          //_pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
-          _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
-          _pTFT->setTextColor(MD_BLUE);
-          _pTFT->print("Done");
-        //get position and check if touched
-        while (1)
-          {
-            tch = _ptouchev->getTouchPos(&p, &raw);
-            if (tch)
-              {
-                sprintf(text,"x %3i y %3i rx %5i ry %5i", p.x, p.y, raw.x, raw.y);
-                SOUT(text);
-                xpos = 25;
-                ypos = 110;
-                if (   (p.x > butExit[0]) && (p.x < butExit[0] + butExit[2])
-                    && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
-                   )
-                  {  // exit calibration routine
-                    SOUTLN(" Calib done");
-                    doExit = true;
-                    _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
-                    _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
-                    break;
-                  }
-                else if (   (p.x > butCal[0]) && (p.x < butCal[0] + butCal[2])
-                         && (p.y > butCal[1]) && (p.y < butCal[1] + butCal[3])
-                        )
-                  { // execute calibration and write to file in flash
-                    SOUTLN(" do Calib");
-                        /*
-                          SOUTLN("Rechnung");
-                          SOUT("x0y0/1 "); SOUT(calP.x0y0.x); SOUT("/"); SOUTLN(calP.x0y1.x);
-                          SOUT("x0/1y0 "); SOUT(calP.x0y0.y); SOUT("/"); SOUTLN(calP.x1y0.y);
-                          SOUT("x1y0/1 "); SOUT(calP.x1y0.x); SOUT("/"); SOUTLN(calP.x1y1.x);
-                          SOUT("x0/1y1 "); SOUT(calP.x0y1.y); SOUT("/"); SOUTLN(calP.x1y1.y);
-                         */
-                    calP.xmin = (calP.x0y0.x + calP.x0y1.x)/2;
-                    calP.ymin = (calP.x0y0.y + calP.x1y0.y)/2;
-                    calP.xmax = (calP.x1y0.x + calP.x1y1.x)/2;
-                    calP.ymax = (calP.x0y1.y + calP.x1y1.y)/2;
-                    int16_t dRawX = calP.xmax - calP.xmin;
-                    int16_t dRawY = calP.ymax - calP.ymin;
-                    calP.xmin -= 10 * dRawX / (xmax - 20);
-                    calP.xmax += 10 * dRawX / (xmax - 20);
-                    calP.ymin -= 10 * dRawY / (ymax - 20);
-                    calP.ymax += 10 * dRawY / (ymax - 20);
-                    _ptouchev->calibrate(calP.xmin, calP.ymin, calP.xmax, calP.ymax);
-                    saveCalibration();
-                  }
-                else if ((raw.x < 1000) && (raw.y < 1000))
-                  {  // touched upper left
-                    ypos = 30;
-                        SOUTLN(" P00");
-                    calP.x0y0 = raw;
-                  }
-                else if ((raw.x > 3000) && (raw.y < 1000))
-                  {  // touched upper right
-                    ypos = 50;
-                        SOUTLN(" P10");
-                    calP.x1y0 = raw;
-                  }
-                else if ((raw.x < 1000) && (raw.y > 3000))
-                  {  // touched lower left
-                    ypos = 70;
-                        SOUTLN(" P01");
-                    calP.x0y1 = raw;
-                  }
-                else if ((raw.x > 3000) && (raw.y > 3000))
-                  {  // touched lower right
-                    ypos = 90;
-                        SOUTLN(" P11");
-                    calP.x1y1 = raw;
-                  }
-
-                _pTFT->setCursor(xpos,ypos);
-                _pTFT->setTextSize(1);
-                _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
-                _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
-                _pTFT->print(text);
-                usleep(500000);
-              }
-          }
-      }
-
-    void md_touch::saveCalibration()
-      {
-        if (pCal != NULL)
-          {
-            pConf->init(pConf);
-            if (pConf->exists("/tcalib.dat"))
-              {
-                pConf->remove("/tcalib.dat");
-              }
-            char buf[20];
-            sprintf(buf,"%3i %3i %4i %4i",pCal->xmin, pCal->ymin, pCal->xmax, pCal->ymax);
-            SOUT("new calib file '"); SOUT(buf); SOUTLN("'");
-            pConf->writeFile("/tcalib.dat", &buf[0]);
-            pConf->end();
-          }
-        else
-          {
-            wrStatus("ERR pCal not existing");
-          }
-      }
-
-#ifdef NOT_USED
   // --- includes
     #include <md_touch.h>
     #include <md_spiffs.h>
@@ -564,700 +7,1038 @@
     #include <md_defines.h>
 
   // --- globals
-    TaskHandle_t touchTask_ = NULL;
-    TaskHandle_t menuTask_  = NULL;
+    static XPT2046_Touchscreen *_ptouch   = NULL;
+    static Adafruit_ILI9341    *_pTFT     = NULL;
+    static MENUITEM_t          *_pTitle   = NULL;
+    static MENUITEM_t          *_pStatus  = NULL;
+    static md_touch            *_pmdtouch = NULL;
+    static md_TouchEvent       *_ptouchev = NULL;
+    static md_menu             *_pmdmenu  = NULL;
+    static md_spiffs           *_pflash   = NULL;
+    static md_tcalData         _calData;
+    static uint8_t             _rotation  = TCAL_ROT_DEF;
+    static uint8_t             _back_row  = 1;
+    static uint8_t             _back_col  = 2;
+    static uint8_t             _ROWS_BACK = BOX_X_MAX;
+    static uint8_t             _COLS_BACK = BOX_Y_MAX;
+    static char                _tCalFile[]= TCAL_FILE_DEF;
+    static uint8_t             _iscal     = MD_UNDEF;
+           uint16_t a;
+           uint16_t b;
+           uint16_t c;
+           uint16_t d;
+    static msTimer             _TStat     = msTimer(5);
+  // specials
+    // touch task internal variables
+      static uint32_t     _tlastT    = 0;
+      static uint32_t     _tactT     = 0;
+      static uint32_t     _tdiffT    = 0;
+      static TaskHandle_t _ptouchTask = NULL;
+      static TS_Point     _touchRaw;
+      static POINT_t      _touchP;
+      static uint8_t      _isclicked = 0;
+      static uint8_t      _touch     = 0;
+      static uint8_t      _touchlast = 0;
+      static uint32_t     _touchTmp  = 0;
+      static uint32_t     _rawTmp    = 0;
+    // touch menu variables
+      static uint32_t     _mlastT    = 0;
+      static uint32_t     _mactT     = 0;
+      static uint32_t     _mdiffT    = 0;
+      static TaskHandle_t _pmenuTask = NULL;
+      static POINT_t      _menuP;
+      static uint32_t     _menuID    = 0;
+      static uint32_t     _menuTmp   = 0;
+    // atomic communication with mdtouch task
+      // valid _tactRaw value cannot be 0 => handshake free
+      // _tactXY value is not allowed     => handshake free
+      // 0: wr: touch task / >0 rd->wr: menu task (!! _tactXY = 0; _tactRaw = 0)
+        IRAM_ATTR uint32_t _tactRaw       = 0; // last touched point (raw type)
+        IRAM_ATTR uint32_t _tactXY        = 0; // last touched point (TFT converted)
+      // 0: wr: menu task  / >0 rd->wr: poll function
+        IRAM_ATTR MENUITEM_t *_mtouchedID  = NULL; // menu info      -> execute menu
+    // control values
+        int8_t             _tCtrlTouch    = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
+                                                          // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
+                                                          // ext  TTASK_ON_HOLD: touch on hold
+                                                          // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
+        int8_t             _tCtrlMenu     = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
+                                                          // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
+                                                          // ext  TTASK_ON_HOLD: touch on hold
+                                                          // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
+        //const uint32_t    _tWait_Touch_us = 10000; // task time tick (minimum = 1000 ~ 1 msec)
+        //const uint32_t    _tWait_Menu_us  = 10000; // task time tick (minimum = 1000 ~ 1 msec)
+    //static TaskHandle_t menuTask_  = NULL;
+  // task touchTask
+    void IRAM_ATTR touchTask(void * pvParameters)
+      {
+        //unsigned long lastWD, actWD, diff;
 
-    uint32_t     menu_ctrl_ = 0;
-    uint32_t     menu_outp_ = 0;
-    uint16_t     x_         = 0;
-    uint16_t     y_         = 0;
-    uint8_t    Z_THRESHOLD_ = 0;
+        //esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
+        //esp_task_wdt_add(NULL);                //add current thread to WDT watch
 
-    uint8_t      tcs_       = 0;
-    uint8_t      tmosi_     = 0;
-    uint8_t      tmiso_     = 0;
-    uint8_t      tsck_      = 0;
-    uint8_t      tirq_      = 255;
-
-  // --- tasks
+          disableLoopWDT();
+        _tlastT = millis();
+        while(TRUE)  // endless loop
+          {
+            //esp_task_wdt_reset();
+            if (_tCtrlTouch < TTASK_ON_HOLD) // only poll, if touch is released from extern
+              {
+                _tactT  = millis();
+                _tdiffT = _tactT - _tlastT;
+                  //_touch = _ptouchev->getTouchPos(&_touchP, &_touchRaw);
+                _touchRaw = _ptouch->getPoint();
+                _touch = FALSE;
+                if (_touchRaw.z > MINPRESSURE)
+                  {
+                    if (   (_touchRaw.x > 10) && (_touchRaw.x < 4000)
+                        && (_touchRaw.y > 10) && (_touchRaw.y < 4000))
+                    _touch = TRUE;
+                  }
+                if (_touch) // touched
+                  {
+                    if (!_touchlast) // new touched
+                      {
+                        _tlastT    = _tactT;         // start touchtime
+                        _touchlast = TRUE;
+                              //_touchP.x = map(_touchRaw.x, DEF_2_MINX, DEF_2_MAXX, 0, DEF_2_TFTW);
+                              //_touchP.y = map(_touchRaw.y, DEF_2_MINY, DEF_2_MAXY, 0, DEF_2_TFTH);
+                              //S2VAL(" new touch x y ", _touchP.x,   _touchP.y);
+                              //S2VAL(" new raw x y ",   _touchRaw.x, _touchRaw.y);
+                        usleep(TOUCH_CLICK_TIME_MS);
+                      }
+                    else // still touched
+                      {
+                        if (_tdiffT > TOUCH_CLICK_TIME_MS)
+                          {
+                            _isclicked = TRUE;
+                                //SVAL(" touch time ms ", _tdiffT);
+                            if (_tdiffT > TOUCH_LONG_TIME_MS) // long click
+                              {
+                                if ( (_touchTmp & TOUCH_TYPE_MAX) != TOUCH_TYPE_LONG ) // only once
+                                  {
+                                    _touchTmp = TOUCH_TYPE_LONG;  // write type
+                                          //S2VAL   (" long touch x y ", _touchP.x,   _touchP.y);
+                                          //S2HEXVAL(" long raw x y ",   _touchRaw.x, _touchRaw.y);
+                                          //S2HEXVAL(" long _rawTmp _touchTmp ", _rawTmp, _touchTmp);
+                                  }
+                              }
+                            else // normal click
+                              {
+                                if ( _touchTmp == 0 ) // only once
+                                  {
+                                    _touchTmp  =  TOUCH_TYPE_CLICK;
+                                        //_touchTmp +=  (_touchP.x << TOUCH_HPOINT_SHIFT) + _touchP.y;
+                                    _rawTmp    =  (_touchRaw.x << TOUCH_HRAW_SHIFT) + _touchRaw.y;
+                                          //S2VAL   (" norm touch x y ", _touchP.x,   _touchP.y);
+                                          //S2HEXVAL(" norm raw x y ",   _touchRaw.x, _touchRaw.y);
+                                          //S2HEXVAL(" norm _rawTmp _touchTmp ", _rawTmp,     _touchTmp);
+                                  }
+                              }
+                          }
+                        usleep(TOUCH_TASK_SLEEP_US);
+                      }
+                  }
+                else // not touched
+                  {
+                    if (!_touchlast) // untouched
+                      {
+                      }
+                    else // released
+                      {
+                        if (_isclicked > FALSE) // touch evaluated
+                          {
+                            if (_tactRaw == 0) // handshake free
+                              {
+                                _tactXY   = _touchTmp;
+                                _tactRaw  = _rawTmp;
+                                      //S2HEXVAL(" output _rawTmp _touchTmp ", _rawTmp,     _touchTmp);
+                                      //S2VAL   (" _rawTmp x y ",             (_rawTmp >> TOUCH_HRAW_SHIFT) & TOUCH_HRAW_MASK , _rawTmp & TOUCH_HRAW_MASK);
+                                      //S3VAL   (" _touchTmp x y type",       (_touchTmp >> TOUCH_HPOINT_SHIFT) & TOUCH_HPOINT_MASK,
+                                      //                                           _touchTmp  & TOUCH_HPOINT_MASK,
+                                      //                                          (_touchTmp  & TOUCH_TYPE_MAX) >> TOUCHED_TYPE_SHIFT);
+                                // reset everything
+                                _touchlast = FALSE;
+                                _touchTmp  = 0;
+                                _rawTmp    = 0;
+                                _isclicked = FALSE;
+                              }
+                          }
+                      }
+                    usleep(TOUCH_TASK_SLEEP_US);
+                  }
+              }
+            else
+              {
+                usleep(TOUCH_TASK_SLEEP_US);
+              }
+          }
+                 /*if (pts_->isTouching())
+                    {
+                      SOUTLN("screen touched ");
+                      pts_->getPosition(x, y);
+                      SOUT("position x"); SOUT(x); SOUT(", y "); SOUTLN(y);
+                        //delay(30);
+                        //pts->readData(&x, &y, &z);
+                        //SOUT("x, y, z "); SOUT(x); SOUT(", "); SOUT(y); SOUT(", "); SOUTLN(z);
+                      //pts->isrWake = false;
+                    }
+                   */
+      }
     void startTouchTask()
       {
         xTaskCreatePinnedToCore(
-                            handleTouch,           /* Task function. */
+                            touchTask,             /* Task function. */
                             "touchTask",           /* name of task. */
                             10000,                 /* Stack size of task */
                             NULL,                  /* parameter of the task */
                             4 | portPRIVILEGE_BIT, /* priority of the task */
-                            &touchTask_,            /* Task handle to keep track of created task */
+                            &_ptouchTask,          /* Task handle to keep track of created task */
                             0              );      /* pin task to core 0 */
         SOUTLN("touchTask started on core 0");
       }
-
+  // task menuTask
+    void IRAM_ATTR menuTask(void * pvParameters)
+      {
+        //unsigned long lastWD, actWD, diff;
+        //esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
+        //esp_task_wdt_add(NULL);                //add current thread to WDT watch
+        //STXT(" menuTask started ");
+        char        _out[MENU_TXTMAX];
+        MENUITEM_t* _pactItem = NULL;
+        _mlastT = millis();
+              //STXT(" vor while ");
+        while(true)  // endless loop
+          {
+            _mactT  = millis();
+                //esp_task_wdt_reset();
+                //STXT(" while 1 ");
+            _mdiffT = _mactT - _mlastT;
+            if (_tCtrlMenu < TTASK_ON_HOLD) // only poll, if touch is released from extern
+               {
+                if (_tactRaw > 0)
+                  {
+                    _menuTmp = _tactRaw;
+                        //STXT(" menuTask 2 ");
+                    _menuP.x = (_menuTmp >> TOUCH_HRAW_BITS) & TOUCH_HRAW_MASK;
+                    _menuP.y = _menuTmp & TOUCH_HRAW_MASK;
+                    _pmdtouch->mapXY(&_menuP);
+                          //S3VAL("       _menuP x y rot ", _menuP.x, _menuP.y, _rotation );
+                    if (_pactItem == NULL)
+                      {
+                        _pactItem = _pmdmenu->getItem(&_menuP);
+                            if (_pactItem == NULL)
+                              {
+                                S3VAL("  touch field x y long ", _menuP.x, _menuP.y, _tactXY);
+                                if (_tactXY == 2) { sprintf(_out, "tchL %d %d", _menuP.x, _menuP.y); }
+                                else              { sprintf(_out, "tch %d %d", _menuP.x, _menuP.y); }
+                                _pmdmenu->wrStatus(_out, 2000);
+                              }
+                            else
+                              {
+                                _mtouchedID = _pactItem;
+                                      S4VAL("  touch       x y idx long ", _menuP.x, _menuP.y, _pactItem->index(), _tactXY);
+                                      if (_tactXY == 2) { sprintf(_out, "tchL %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index()); }
+                                      else              { sprintf(_out, "tch %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index()); }
+                                      _pmdmenu->wrStatus(_out, 2000);
+                                _pactItem   = NULL;
+                              }
+                      }
+                    _tactXY  = 0;
+                    _tactRaw = 0;
+                  }
+                //if (_pactItem != NULL)
+              }
+            //STXT(" end while ");
+            usleep(MENU_TASK_SLEEP_US);
+          }
+      }
     void startMenuTask()
       {
         xTaskCreatePinnedToCore(
-                            handleMenu,            /* Task function. */
-                            "menuTask",               /* name of task. */
+                            menuTask,              /* Task function. */
+                            "menuTask",            /* name of task. */
                             10000,                 /* Stack size of task */
                             NULL,                  /* parameter of the task */
                             4 | portPRIVILEGE_BIT, /* priority of the task */
-                            &menuTask_,             /* Task handle to keep track of created task */
-                            0              );      /* pin task to core 0 */
-        SOUTLN("menuTask started on core 0");
+                            &_pmenuTask,            /* Task handle to keep track of created task */
+                            0                                                                                                                                                                                                                                                                                                         );      /* pin task to core 0 */
+        STXT("menuTask started on core 1");
       }
-
-  // --- task handle
-  void handleTouch(void * pvParameters)
-    {
-      uint16_t x;
-      uint16_t y;
-
-      while(true)  // endless loop
+  // --- class md_touch
+    // construtors
+    	//md_touch::md_touch(uint8_t cspin,   uint8_t tft_CS, uint8_t tft_DC, uint8_t tft_RST,
+      //                   uint8_t tft_LED, uint8_t led_ON, md_spiffs *pflash) //, uint8_t spi_bus)
+    	md_touch::md_touch(Adafruit_ILI9341*    pTFT,
+                         XPT2046_Touchscreen* ptouch,
+                         md_TouchEvent*       ptouchev,
+                         uint8_t tft_LED, uint8_t led_ON, md_spiffs *pflash) //, uint8_t spi_bus)
         {
-          if (pts_->isTouching())
-            {
-              SOUTLN("screen touched ");
-              pts_->getPosition(x, y);
-              SOUT("position x"); SOUT(x); SOUT(", y "); SOUTLN(y);
-                //delay(30);
-                //pts->readData(&x, &y, &z);
-                //SOUT("x, y, z "); SOUT(x); SOUT(", "); SOUT(y); SOUT(", "); SOUTLN(z);
-              //pts->isrWake = false;
-            }
-          sleep(2);
-          usleep(2000);
+          _pmdtouch = this;
+          _pTFT     = pTFT;     // TFT   library Adafruit_ILI9341
+          _ptouch   = ptouch;   // touch library XPT2046_Touchscreen
+          _ptouchev = ptouchev; // event library md_TouchEvent
+          _pflash   = pflash;   // internal flash
+          _ledpin   = tft_LED;  // backlight switch
+          _LED_ON   = led_ON;   // ON state for backlight
         }
-    }
-
-  void handleMenu(void * pvParameters)
-    {
-      while(true)  // endless loop
+      md_touch::~md_touch()
         {
-          //SOUTLN("! handleMenu called !");
-
-          usleep(2000);
+          _pmdtouch = NULL;
         }
-    }
-
-  // --- callback functions
-    /*void isrPin( void )
-        {
-        	XPT2046_Calibrated *o = pts_;
-        	o->isrWake = true;
-        }
-      */
-
-  void    actLev(uint32_t val, uint8_t level)
-    {
-    }
-
-  uint8_t actLev(uint32_t val)
-    {
-      return true;
-    }
-
-  void    oldLev(uint32_t val, uint8_t level)
-    {
-    }
-
-  uint8_t oldLev(uint32_t val)
-    {
-      return true;
-    }
-
-  void    actPage(uint32_t val, uint8_t page)
-    {
-    }
-
-  uint8_t actPage(uint32_t val)
-    {
-      return true;
-    }
-
-  void    oldPage(uint32_t val, uint8_t page)
-    {
-    }
-
-  uint8_t oldPage(uint32_t val)
-    {
-      return true;
-    }
-
-    /*
-      void calibrate()
-        {
-          uint16_t x1, y1, x2, y2;
-          //uint16_t vi1, vj1, vi2, vj2;
-          uint8_t  isok = false;
-          calParams_t calPars;
-          char buf[80];
-
-          SOUTLN("Start calibration ...");
-          pts_->getCalibrationPoints(x1, y1, x2, y2);
-          SOUT("cal points "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(x2); SOUT(" "); SOUTLN(y2);
-          do // calib until plausibility
-            {
-              calibratePoint(x1, y1, calPars.vi1, calPars.vj1);
-              SOUT("cal p(1) "); SOUT(calPars.vi1); SOUT(" "); SOUTLN(calPars.vj1);
-              sleep(1);
-              //usleep(50000);
-              calibratePoint(x2, y2, calPars.dvi, calPars.dvj);
-              SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(calPars.dvi); SOUT(" "); SOUTLN(calPars.dvj);
-              pts_->setCalibration(&calPars);
-              //snprintf(buf, sizeof(buf), "%d,%d,%d,%d", (int)vi1, (int)vj1, (int)vi2, (int)vj2);
-              SOUT("buf '"); SOUTLN(buf);
-              // show result on touch
-                pgfx_->fillBuffer(MD4_BLACK);
-                pgfx_->setFont(ArialRoundedMTBold_14);
-                pgfx_->setColor(MD4_YELLOW);
-                pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
-                pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
-                pgfx_->commit();
-            }
-          while (!isok);
-          snprintf(buf, sizeof(buf), "%d/n%d/n%d/n%d/n%d/n%d/n", calPars.dx, calPars.dy,
-                                     calPars.vi1, calPars.vj1, calPars.dvi, calPars.dvj);
-          pmdt_->saveCalibration(buf, sizeof(buf));
-        }
-    */
-  // ----------------------------------------------------------------
-  // --- class md_menu
-    md_menu::md_menu()  {}
-    md_menu::~md_menu() {}
-
-    void md_menu::begin(Adafruit_ILI9341* ptft,
-                        const int16_t x, const int16_t y, const int16_t w,
-                        const uint8_t pages, const uint8_t lines, const uint8_t line_h)
-      {
-        md_list *plist = NULL;
-        SOUTLN("init menu ...");
-        // define outline geometry header
-        _x     = x;
-        _wline = _x + w - 1;
-        _hline = line_h;
-        _y[0]  = y;
-        _ym[0] = _y[0] + _hline - 1;
-        // define menu
-        _pages = pages;
-        _lines = lines;
-        // grafic object
-        pgfx_ = pgfx;
-        // create menu lists
-        static md_list list = md_list();
-        _phead = &list;
-                    //SOUT("  main menu");
-                    //SOUT(" y "); SOUT(_y[0]); SOUT(" - "); SOUTLN(_ym[0]);
-        for (uint8_t i = 0; i < MENU_MAXLINES ; i++ )
+    // public implementation
+      // initialising
+        void md_touch::setRotation(uint8_t rotation)
           {
-            plist = new md_list();
-            _ppages[i] = plist;
-                    //SOUT("  menu page "); SOUT(i); SOUT(" "); SOUTHEX((uint32_t) plist);
-            _y[i+1]  = _y[i]   + _hline + 2;
-            _ym[i+1] = _y[i+1] + _hline - 1;
-                    //SOUT(" y "); SOUTLN(_y[i+1]);
+            _rotation = rotation %4;
           }
-        startMenuTask();
-        SOUTLN("menu initialized");
-      }
-
-    void md_menu::load(const char* entries, const uint8_t cnt, uint8_t mtype)
-      {
-        if (pgfx_ != NULL)
+        uint8_t md_touch::rotation()
           {
-            md_cell* pcell = NULL;
-                    //SOUT("load menu ... ");
-            md_list* _plist = NULL;
-            char* _ptext    = (char*) entries;
-            if (mtype == MENUTYPE_MAIN) // main menue
-              {
-                _plist = _phead;
-              }
-            else if (mtype < _pages) // pages menu
-              {
-                _plist = _ppages[mtype];
-              }
-              else // ERROR
-                {
-                  SOUT(" ERRROR !! page "); SOUT(mtype); SOUT(" is to high !"); SOUTLN(_pages);
-                }
-            // load title
-            pcell = new md_cell();
-            pcell->setobj((void*) _ptext);
-            _plist->add(pcell);
-                      //SOUTLN(_ptext);
-
-            for (uint8_t i = 0; i < cnt - 1 ; i++)
-              {
-                _ptext += MENU_TXTLEN + 1;
-                pcell = new md_cell();
-                      //SOUT(" load new Entry '"); SOUTHEX((uint32_t) pcell);
-                      //SOUT("' "); SOUT(_ptext);
-                pcell->setobj((void*) _ptext);
-                _plist->add(pcell);
-                      //SOUT(" obj '"); SOUT((char*) pcell->getobj()); SOUTLN("'");
-              }
-                      //SOUTLN("  menu valid");
+            return _rotation;
           }
-        else
-          { SOUTLN(" ERROR !! menu not initialized !! "); }
-      }
-
-    void md_menu::show()
-      {
-        if (_phead > NULL)
+    // private implementation
+      // initialising
+        void md_touch::start(uint8_t rotation, uint8_t doTask)
           {
-            md_list* plist = NULL;
-            md_cell* pcell = NULL;
-            uint8_t  lev   = 0;
-            uint8_t  page  = 0;
-
-            // check actual pages and action
-
-            // open list
-                      //SOUTLN("show openlist");
-            if (lev == 0)
-              { plist = _phead; }
-            else
-              { plist = _ppages[page]; }
-            // draw title
-            for (uint8_t i = 0 ; i <= _pages ; i++ )
+            if (!_isinit)
               {
-                      //SOUT(i); SOUT(" - ");
-                pcell = (md_cell*) plist->pIndex(i);
-                if ( i == 0 )
-                  { //this->drawEntry((char*) pcell->getobj(), i, MD4_YELLOW);
-                  }
-                else
-                  { this->drawEntry((char*) pcell->getobj(), i); }
-                      //SOUTLN((char*) pcell->getobj());
-              }
-          }
-          else
-            {
-              SOUTLN(" ERROR !! show: menu not initialized !!");
-            }
-      }
-
-    void md_menu::hide()
-      {
-
-      }
-
-    void md_menu::drawEntry(const char* txt, uint8_t line, uint16_t color)
-      {
-        //pgfx_->setColor(MD4_BLACK);
-        pgfx_->drawRect(_x, _y[line], _ym[line], 16);
-        pgfx_->commit();
-        pgfx_->setFont(MENU_FONT);
-        pgfx_->setColor(color);
-        pgfx_->drawString(_x + 1, _y[line] + 1, txt);
-        pgfx_->commit();
-      }
-
-  // ----------------------------------------------------------------
-  // --- class bmp_pgm
-  bmp_pgm::bmp_pgm(Adafruit_ILI9341* ptft) { _ptft = ptft; }
-  bmp_pgm::~bmp_pgm() {}
-
-  /*
-      void bmp_pgm::init(mdGrafx *ptft, const char *palBmp)
-        {
-          SOUT(" bmp::init grafx "); SOUTHEX((uint32_t) ptft); SOUT(" bmp "); SOUTHEXLN((uint32_t) palBmp);
-          if (palBmp != NULL)
-            {
-              SOUT(" getBMPHeader ...");
-              _ptft = ptft;
-              _pbmp = palBmp;
-              _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
-              SOUTLN(" ready");
-            }
-        }
-    */
-
-  void bmp_pgm::draw(const char *palBmp ,int16_t x, int16_t y)  // left upper position
-    {
-      if ( (x >= 0) && (y >= 0) & (palBmp != NULL))
-        {
-          if ((_pbmp != NULL) && (_pbmp != palBmp))
-            { // clear old logo
-              _ptft->setColor(MD16_BLACK);
-              _ptft->fillRect(_posx, _posy, _head.width, _head.height);
-              _ptft->commit();
-            }
-          _posx = x;
-          _posy = y;
-          _pbmp = palBmp;
-          _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
-          _ptft->drawPalettedBitmapFromPgm(_posx, _posy, _pbmp);
-            /*
-              SOUT("draw icon addr "); SOUTHEX((uint32_t) _pbmp);
-              SOUT(" size "); SOUT(_head.width * _head.height + sizeof(BMPHeader_t));
-              SOUT(" bmpcolor "); SOUT(_head.bitDepth);
-              SOUT(" width "); SOUT(_head.width); SOUT(" height "); SOUTLN(_head.height);
-              */
-        }
-    }
-
-#ifdef PARKENS
-
-  TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
-
-  #define CALIBRATION_FILE "/TouchCalData1" // internal flash drive
-  #define REPEAT_CAL false // Set to run calibration every startup
-  // Keypad start position, key sizes and spacing
-  char numberBuffer[KEY_NUM_LEN + 1] = "";
-  uint8_t numberIndex = 0;
-
-  // create  keys for the keypad
-  char     keyLabel[KEY_NUM_LEN][5] = {"SET", "DO", "OK"};
-  uint16_t keyColor[KEY_NUM_LEN] = {TFT_GREENYELLOW, TFT_GREENYELLOW, TFT_RED};
-  uint16_t labelColor[KEY_NUM_LEN] = {TFT_NAVY, TFT_NAVY, TFT_GREENYELLOW};
-
-  // Invoke the TFT_eSPI button class and create all the button objects
-  TFT_eSPI_Button key[KEY_NUM_LEN];
-
-  // public implementation
-  bool md_touch::startTouch()
-    {
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println("md_touch::startTouch .. initTFT .."); delay(100);
-          #endif
-      _initTFT(TFT_BL);
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println(".. clearTFT .."); delay(100);
-          #endif
-      _clearTFT();
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println(".. drawKeypad .."); delay(100);
-          #endif
-      _drawKeypad();
-          #if (DEBUG_MODE >= CFG_DEBUG_DETAILS)
-            Serial.println(".. wrstatus .."); delay(100);
-          #endif
-      wrStatus("TFT&Touch started");
-          #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
-            Serial.println("md_touch::startTouch ready"); delay(100);
-          #endif
-      return ISOK;
-    }
-
-  bool md_touch::calTouch() // calibrate touch
-    {
-      uint16_t calData[5];
-      uint8_t calDataOK = 0;
-
-      // check file system exists
-      if (!SPIFFS.begin())
-      {
-        Serial.println("Formating file system");
-        SPIFFS.format();
-        SPIFFS.begin();
-      }
-
-      // check if calibration file exists and size is correct
-      if (SPIFFS.exists(CALIBRATION_FILE))
-      {
-        if (REPEAT_CAL)
-        {
-          // Delete if we want to re-calibrate
-          SPIFFS.remove(CALIBRATION_FILE);
-        }
-        else
-        {
-          File f = SPIFFS.open(CALIBRATION_FILE, "r");
-          if (f)
-          {
-            if (f.readBytes((char *)calData, 14) == 14)
-              calDataOK = 1;
-            f.close();
-          }
-        }
-      }
-
-      if (calDataOK && !REPEAT_CAL)
-      {
-        // calibration data valid
-        tft.setTouch(calData);
-      }
-      else
-      {
-        // data not valid so recalibrate
-        tft.fillScreen(TFT_BLACK);
-        tft.setCursor(20, 0);
-        tft.setTextFont(2);
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
-
-        tft.println("Touch corners as indicated");
-
-        tft.setTextFont(1);
-        tft.println();
-
-        if (REPEAT_CAL)
-        {
-          tft.setTextColor(TFT_RED, TFT_BLACK);
-          tft.println("Set REPEAT_CAL to false to stop this running again!");
-        }
-
-        tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, 15);
-        //   tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, TFT_CS);
-
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.println("Calibration complete!");
-
-        // store data
-        File f = SPIFFS.open(CALIBRATION_FILE, "w");
-        if (f)
-        {
-          f.write((const unsigned char *)calData, 14);
-          //      f.write((const unsigned char *)calData, TOUCH_CS);
-          f.close();
-        }
-      }
-      return false;
-    }
-
-  bool md_touch::wrTouch(const char *msg, uint8_t spalte, uint8_t zeile ) // write to text area
-    {
-      //Serial.print("Write "); Serial.print(msg); Serial.print(" - "); Serial.print(zeile); Serial.print(" - "); Serial.println(spalte);
-      tft.setTextPadding(240);
-      tft.setTextColor(DISP_TX_FCOL, DISP_TX_BCOL);
-      tft.setTextDatum(L_BASELINE);
-
-      tft.setTextFont(2);
-      tft.setTextSize(2);
-      //tft.setCursor(spalte, zeile);
-      strncpy(outTxt, msg, STAT_LINELEN - spalte + 1);
-      //  outTxt[STAT_LINELEN - spalte] = 0;
-      tft.drawString(outTxt, spalte * 13, zeile * 29 - 5 );
-      return ISOK;
-    }
-
-  void md_touch::runTouch(char* pStatus)
-    {
-        uint16_t t_x = 0, t_y = 0; // To store the touch coordinates
-        boolean pressed = false;
-
-        // touch lesen
-        if (pressed = tft.getTouch(&t_x, &t_y))
-            {
-              if (!isAct)
-                {
-                  sprintf(outTxt," x%d, y%d", t_x, t_y);
-                  Serial.println(outTxt);
-                  wrTouch(outTxt, 0, 3);
-                  wrTouch("", 0, 4);
-                  SET(isAct);
-                }
-            }
-          else
-            {
-              if (isAct)
-                {
-                  Serial.println(" released ");
-                  wrTouch("", 0, 3);
-                  RESET(isAct);
-                }
-            }
-
-        // / Check if any key coordinate boxes contain the touch coordinates
-        for (uint8_t b = 0; b < KEY_NUM_LEN; b++)
-          {
-            if (pressed && key[b].contains(t_x, t_y))
-                {
-                  key[b].press(true);  // tell the button it is pressed
-                }
-              else
-                {
-                  key[b].press(false);  // tell the button it is NOT pressed
-                }
-          }
-
-        // Check if any key has changed state
-        for (uint8_t b = 0; b < KEY_NUM_LEN; b++)
-          {
-            // set caption font
-            if (b < 2)
-              {
-                //tft.setFreeFont(NORM_FONT);
-                tft.setFreeFont(BOLD_FONT);
-              }
-              else
-              {
-                tft.setFreeFont(BOLD_FONT);
-              }
-
-
-
-            // check and handle state
-            if (key[b].justReleased())
-              {
-                key[b].drawButton();     // draw normal
-              }
-
-            if (key[b].justPressed())
-              {
-                key[b].drawButton(true);  // draw invert
-                switch (b)
+                _rotation = rotation %4;
+                switch (_rotation) // set default calibration values
                   {
                     case 0:
-                      Serial.println("key 1 pressed");
-                      wrTouch(" key 1", 4, 4);
+                        strcpy(_tCalFile,"/Touchtest_0.dat");
+                        _calData.setxmin(DEF_0_MINX);
+                        _calData.setymin(DEF_0_MINY);
+                        _calData.setxmax(DEF_0_MAXX);
+                        _calData.setymax(DEF_0_MAXY);
                       break;
                     case 1:
-                      wrTouch(" key 2", 4, 4);
-                      Serial.println("key 2 pressed");
+                        strcpy(_tCalFile,"/Touchtest_1.dat");
+                        _calData.setxmin(DEF_1_MINX);
+                        _calData.setymin(DEF_1_MINY);
+                        _calData.setxmax(DEF_1_MAXX);
+                        _calData.setymax(DEF_1_MAXY);
                       break;
                     case 2:
-                      wrTouch(" key 3", 4, 4);
-                      Serial.println("key 3 pressed");
+                        strcpy(_tCalFile,"/Touchtest_2.dat");
+                        _calData.setxmin(DEF_2_MINX);
+                        _calData.setymin(DEF_2_MINY);
+                        _calData.setxmax(DEF_2_MAXX);
+                        _calData.setymax(DEF_2_MAXY);
                       break;
                     default:
-                        break;
+                        strcpy(_tCalFile,"/Touchtest_3.dat");
+                        _calData.setxmin(DEF_3_MINX);
+                        _calData.setymin(DEF_3_MINY);
+                        _calData.setxmax(DEF_3_MAXX);
+                        _calData.setymax(DEF_3_MAXY);
+                      break;
                   }
-
-                // Draw the string, the value returned is the width in pixels
-                // int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
-
-                // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
-                // but it will not work with italic or oblique fonts due to character overlap.
-                // tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
-
-                usleep(10000); // UI debouncing
+                char buf[50];
+                // start TFT
+                startTFT();
+                // start XPT2046 touch
+                     #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                        SOUTLN(" .. md_touch .. start XPT2046 touch");
+                      #endif
+                _ptouch->begin();
+                _ptouch->setRotation(_rotation);
+                //_ptouchev->setResolution(_pTFT->width(),_pTFT->height());
+                //_ptouchev->setDrawMode(false);
+                    #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                        SOUTLN("             .. load calibration .. ");
+                      #endif
+                // load and check calibration
+                loadCalibration();
+          //doCalibration();
+                switch (_iscal)
+                  {
+                    case MD_RDY:
+                        //wrStatus("Kalibrierung gefunden", MD_SEL);
+                        //sleep(1);
+                        #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                            SOUTLN("             .. load calibration ok ");
+                          #endif
+                      break;
+                    case MD_SEL:
+                        #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                            SOUTLN("             .. check and save calib ");
+                          #endif
+                        doCalibration();
+                      break;
+                    default:
+                        #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                            SOUTLN("             .. is to be calibrated");
+                          #endif
+                        doCalibration();
+                      break;
+                  }
+                if (doTask)
+                  {
+                    startTouchTask();
+                    //startMenuTask();
+                  }
+                //doCalibration();
+                _isinit   = TRUE;
               }
           }
-  //        pStatus =  pStatus;  // no warning
-    }
-
-  bool md_touch::wrStatus() // write status line
-    {
-      return wrStatus("");
-    }
-  bool md_touch::wrStatus(const char *msg)
-    {
-      return wrStatus(msg,STAT_DELTIME);
-    }
-  bool md_touch::wrStatus(const char *msg, uint32_t stayTime)
-    {
-      //unsigned long diffTime = millis() - statWrTime;
-      int8_t res = 0; // -1:wait, 0:ok, 1:write , 2:clear
-      bool   ret = ISOK;
-      if(strlen(msg) == 0)
-      {
-        if ((isStatus == true) && (clrT.TOut() == true))
-        { // status is visible && timeout
-          res = 2;
-          isStatus = false;
-                #if (DEBUG_MODE >= CFG_DEBUG_ACTIONS)
-                  Serial.print((uint32_t) millis());
-                  Serial.println(" Statuszeile loeschen");
-                #endif
-        }
-      }
-      else
-      {
-        if ((isStatus == true) && (minT.TOut() == false))
-        { // visible status has to stay
-          res = -1;
-        }
-        else
-        { // write it
-          res = 1;
-          isStatus = true;
-          if (stayTime == 0)
+        void md_touch::startTFT()
           {
-            stayTime = STAT_DELTIME;
+            if (!_isinit)
+              {
+                    #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                        STXT(" .. md_touch .. start tft");
+                      #endif
+                pinMode(_ledpin, OUTPUT);
+                digitalWrite(_ledpin, _LED_ON); // switch on backlight
+                _pTFT->begin(TFT_FREQU);
+                _pTFT->setRotation(_rotation);
+                _pTFT->fillScreen(MD_GREEN);
+                usleep(20000);
+                _pTFT->fillScreen(MD_OLIVE);
+                //_pTFT->setFont(MENU_FONT);
+                    STXT(" TFT run ");
+              }
           }
-                #if (DEBUG_MODE >= CFG_DEBUG_ACTIONS)
-                  Serial.print((uint32_t) millis());
-                  Serial.println(" Statuszeile schreiben");
-                #endif
-        }
+        void md_touch::mapXY(POINT_t* pPt)
+          {
+            TS_Point p1;
+            switch (_rotation)
+              {
+                case 0:
+                    p1.x = map(pPt->x, DEF_0_MINX, DEF_0_MAXX, 10, DEF_0_TFTW - 10);
+                    p1.y = map(pPt->y, DEF_0_MINY, DEF_0_MAXY, 10, DEF_0_TFTH - 10);
+                  break;
+                case 1:
+                    p1.x = map(pPt->x, DEF_1_MINX, DEF_1_MAXX, 10, DEF_1_TFTW - 10);
+                    p1.y = map(pPt->y, DEF_1_MINY, DEF_1_MAXY, 10, DEF_1_TFTH - 10);
+                  break;
+                case 2:
+                    p1.x = map(pPt->x, DEF_2_MINX, DEF_2_MAXX, 10, DEF_2_TFTW - 10);
+                    p1.y = map(pPt->y, DEF_2_MINY, DEF_2_MAXY, 10, DEF_2_TFTH - 10);
+                  break;
+                case 3:
+                    p1.x = map(pPt->x, DEF_3_MINX, DEF_3_MAXX, 10, DEF_3_TFTW - 10);
+                    p1.y = map(pPt->y, DEF_3_MINY, DEF_3_MAXY, 10, DEF_3_TFTH - 10);
+                  break;
+              }
+            pPt->x = p1.x;
+            pPt->y = p1.y;
+          }
 
-      }
-      if (res > 0)
-      {
-        memset(outTxt, 0, STAT_LINELEN + 1);
-        if (res == 1)
+        void md_touch::loadCalibration()
+          {
+            uint8_t  res;
+            char buf[50];
+            _pflash->init(_pflash);
+            _iscal = MD_UNDEF;
+                SVAL(" .. read ", _tCalFile);
+            if (_pflash->exists(_tCalFile))
+              {
+                res = _pflash->readFile(_tCalFile, 40, buf);
+                if (res == ESP_OK)
+                  {
+                    S3VAL(" .. found ",_tCalFile, buf, strlen(buf));
+                    //sscanf((char*) buf, "%3i %3i %4i %4i", a, b, c, d);
+                    STXT("scan ok");
+                    //_calData.setxmin(a);
+                    //_calData.setymin(b);
+                    //_calData.setxmax(c);
+                    //_calData.setymax(d);
+                    _iscal = MD_RDY;
+                  }
+              }
+                  #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
+                      SVAL(" val int rot ", _rotation );
+                      S2VAL(" val int xmin ymin", _calData.xmin(), _calData.ymin());
+                      S2VAL(" val int xmax ymax", _calData.xmax(), _calData.ymax());
+                    #endif
+            _pflash->end();
+            //_ptouchev->calibrate(_calData.xmin(), _calData.ymin(), _calData.xmax(), _calData.ymax());
+          }
+        void md_touch::checkCalibration()
+          {
+            //if (!pCal) { loadCalibration(); }
+          }
+        void md_touch::doCalibration()
+          {
+            //#ifdef NOTUSED
+                //calData_t rawP, calP;
+                int16_t   xpos = 10;
+                int16_t   ypos = 10;
+                int16_t   xmax, ymax;
+                boolean   tch;
+                int16_t   wx, wy;
+                uint16_t  ww, wh;
+                POINT_t    raw;
+                POINT_t   p;
+                int16_t   butCal[4]  = {70,  160, 70, 32};
+                int16_t   butExit[4] = {145, 160, 55, 32};
+                bool      doExit     = false;
+                char      text[60];
+                uint8_t   i = 0;
+
+                // stop menu task (uses same touch interface)
+                _pmdmenu->suspend();
+                _pTFT->setTextSize(1);
+                switch (_rotation) // set max limits
+                  {
+                    case 0:
+                    case 2:  xmax = 240; ymax = 320; break;
+                    case 1:
+                    case 3:  xmax = 320; ymax = 240; break;
+                  }
+                  // _pTFT->setRotation(i);
+
+                for ( i = 0; i < 4 ; i++ )  // draw calibrations points and text
+                  {
+                    switch (i)
+                      {
+                        case 0: xpos = 10;       ypos = 10;       wx =  10; wy =  5;  break;
+                        case 1: xpos = xmax -10; ypos = 10;       wx = -60; wy =  5;  break;
+                        case 2: xpos = 10;       ypos = ymax -10; wx =  10; wy = -10; break;
+                        case 3: xpos = xmax -10; ypos = ymax -10; wx = -60; wy = -10; break;
+                      }
+                    _pTFT->drawRect( xpos, ypos, 3, 3, ILI9341_YELLOW); // draw point
+                    // set and draw text
+                      sprintf(text,"%i / %i", xpos, ypos);
+                      xpos += wx; ypos += wy;
+                      _pTFT->setCursor(xpos, ypos);
+                      _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+                      _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+                      _pTFT->print(text);
+                  }
+                    // draw buttons
+                      STXT(" draw buttons ");
+                      _pTFT->setTextSize(2);
+                      _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+                      _pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+                      _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
+                      _pTFT->setTextColor(MD_YELLOW);
+                      _pTFT->print("Calib");
+                      _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
+                      _pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
+                      _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
+                      _pTFT->setTextColor(MD_BLUE);
+                      _pTFT->print("Done");
+                    // clear interface
+                      _tactXY  = 0;
+                      _tactRaw = 0;
+                    //get position and check if touched
+                     while (!doExit)
+                      {
+                        // menu interface to touch task
+                        _menuTmp = _tactRaw;
+
+                        if (_menuTmp == 0)
+                          {
+                            usleep(30000);
+                          }
+                        else
+                          {
+                            SHEXVAL(" Calib _tactRaw ", _menuTmp);
+                                //STXT(" menuTask 2 ");
+                            //_menuP.x = (_menuTmp >> TOUCH_HPOINT_BITS) & TOUCH_HPOINT_MASK;
+                            raw.x = (_menuTmp >> TOUCH_HRAW_BITS) & TOUCH_HRAW_MASK;
+                            //_menuP.y = _menuTmp & TOUCH_HPOINT_MASK;
+                            raw.y = _menuTmp & TOUCH_HRAW_MASK;
+                            //_menuTmp &= TOUCH_TYPE_MAX;
+                            p=raw;
+                            _pmdtouch->mapXY(&p);
+                            _tactXY  = 0;
+                            _tactRaw = 0;
+                            S3VAL(" scalP x y rot ", p.x, p.y, _rotation );
+                            sprintf(text," x %3i y %3i rx %4i ry %4i", p.x, p.y, raw.x, raw.y);
+                            STXT(text);
+                            xpos = 25;
+                            ypos = 110;
+                            _pTFT->setCursor(xpos,ypos);
+                            _pTFT->setTextSize(2);
+                            _pTFT->getTextBounds(&text[0], xpos, ypos, &wx, &wy, &ww, &wh);
+                            _pTFT->fillRect(wx, wy, ww, wh, ILI9341_BLACK);
+                            _pTFT->print(text);
+                            if (   (p.x > butExit[0]) && (p.x < butExit[0] + butExit[2])
+                                && (p.y > butExit[1]) && (p.y < butExit[1] + butExit[3])
+                               )
+                              {  // exit calibration routine
+                                STXT(" Calib done");
+                                doExit = TRUE;
+                                _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
+                                _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
+                              }
+                            usleep(500000);
+                          }
+                       }
+                _pmdmenu->resume();
+          }
+        void md_touch::saveCalibration()
+          {
+                _pflash->init(_pflash);
+                if (_pflash->exists(_tCalFile))
+                  {
+                    _pflash->remove(_tCalFile);
+                  }
+                char buf[20];
+                sprintf(buf,"%3i %3i %4i %4i", _calData.xmin(), _calData.ymin(), _calData.xmax(), _calData.ymax());
+                S2VAL("new calib file ", _tCalFile ,buf);
+                _pflash->writeFile((char*) _tCalFile, &buf[0]);
+                _pflash->end();
+          }
+
+    // public implementation
+        void md_touch::wrText(const char* msg, uint8_t spalte, uint8_t zeile, uint8_t len)
+          {
+          }
+        void md_touch::wrText(String msg, uint8_t spalte, uint8_t zeile, uint8_t len)
+          {
+            wrText(msg.c_str(), spalte, zeile, len);
+          }
+        void md_touch::run()
+          {
+
+          }
+        void md_touch::suspend()
+          { if (_pmdtouch != NULL) { vTaskSuspend( _pmdtouch ); } }
+        void md_touch::resume()
+          { if (_pmdtouch != NULL) { vTaskResume( _pmdtouch ); } }
+  // md_menu
+      md_menu::md_menu()
         {
-          strncpy(outTxt, msg, STAT_LINELEN);
+          _pmdmenu = this;
+          _TStat.startT(1);
         }
-        ret = _drawStatus(outTxt);
-        minT.startT();              // start timer min time
-        clrT.startT(stayTime);      // start timer max time
-        res = 0;
-      }
-      return (ret || (res != 0));
-    }
-  //
-  // ------ private implementation ------------
-  bool md_touch::_drawScreen()
-    {
-      // Draw keypad background
-      tft.fillRect(0, 0, 240, 320, TFT_DARKGREY);
-      // Draw number display area and frame
-      tft.fillRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_BLACK);
-      tft.drawRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_WHITE);
-      return ISOK;
-    }
+      md_menu::~md_menu() {}
+      // init assumes that _pTFT is already initialized
+      void md_menu::init(md_list* pMenu, MENUITEM_t* pTitle, MENUITEM_t* pStatus)
+        {
+          MENUITEM_t*  _ptmp = NULL;
+          STXT(" .. init menu .. ");
+          // init menu basics
+            //_itemCnt  = itemCnt;
+            _pMenu    = pMenu;
+            _pTitle   = pTitle;
+            _pStatus  = pStatus;
+          // init & draw backscreen
+            STXT(" .. init backscreen .. ");
+            _backpos.x  = 0;
+            _backpos.y  = BOX_GRID;
+            _backsize.x = _pTFT->width();
+            _backsize.y = _pTFT->height() - (2 * BOX_GRID);
+            wrback();
+              //S4VAL("      backpos pos.x .y .w .h ", _backpos.x, _backpos.y, _backsize.x, _backsize.y);
+          // init & show title
+            STXT(" .. init menu title ");
+            // x y pos
+              _pTitle->boxpos.x = (_pTitle->menuid.scrcol - 1) * BOX_GRID;
+              if (_pTitle->boxpos.x  < 0) { _pTitle->boxpos.x = 0; }
+              _pTitle->boxpos.y = (_pTitle->menuid.scrrow - 1) * BOX_GRID;
+              if (_pTitle->boxpos.y  < 0) { _pTitle->boxpos.y = 0; }
+            // w h size
+              _pTitle->boxsize.x  = (_pTitle->menuid.itemw) * BOX_GRID;
+              if (_pTitle->boxsize.x < BOX_GRID) { _pTitle->boxsize.x  = BOX_GRID; }
+              _pTitle->boxsize.y = BOX_GRID - 1;
+                //S3VAL("      title grid.x .y .w .h ", _pTitle->menuid.scrcol, _pTitle->menuid.scrrow, _pTitle->menuid.itemw);
+                //S4VAL("      title  pos.x .y .w .h ", _pTitle->boxpos.x,  _pTitle->boxpos.y,  _pTitle->boxsize.x,  _pTitle->boxsize.y);
+                //S2HEXVAL("    init title      itemID menstat ", _pTitle->menuid.itemID(), _pTitle->menuid.menstat);
+            // menu ID
+              _pTitle->menuid.menstat |= MENBIT_TODRAW;
+              _pTitle->menuid.menstat |= MENBIT_ISVIS;
+              _pTitle->index(255);
+                  //S2HEXVAL(" init title nach itemID ISVIS ", _pTitle->menuid.menstat, MENBIT_ISVIS);
+            show(_pTitle);
+          // init & show status box
+            // x/y pos
+              STXT(" .. init menu status ");
+              _pStatus->boxpos.x = (_pStatus->menuid.scrcol - 1) * BOX_GRID;
+              if (_pStatus->boxpos.x < 0) { _pStatus->boxpos.x = 0; }
 
-  bool md_touch::_drawKeypad()
-    {
-      // Draw the keys
-      for (uint8_t col = 0; col < 3; col++)
+              _pStatus->boxpos.y  = ((_pStatus->menuid.scrrow - 1) * BOX_GRID) + 1;
+              if (_pStatus->boxpos.y  < 0) { _pStatus->boxpos.y  = 0; }
+            // w/h size
+              _pStatus->boxsize.x  = (_pStatus->menuid.itemw) * BOX_GRID;
+              if (_pStatus->boxsize.x < BOX_GRID) { _pStatus->boxsize.x  = BOX_GRID; }
+
+              _pStatus->boxsize.y  = BOX_GRID - 1;
+                  //S3VAL("      status grid.x .y .w .h ", _pStatus->menuid.scrcol, _pStatus->menuid.scrrow, _pStatus->menuid.itemw);
+                  //S4VAL("      status  pos.x .y .w .h ", _pStatus->boxpos.x,  _pStatus->boxpos.y,  _pStatus->boxsize.x,  _pStatus->boxsize.y);
+                  //S2HEXVAL("    init status      itemID menstat ", _pStatus->menuid.itemID(), _pStatus->menuid.menstat);
+              // menu ID
+              _pStatus->menuid.menstat |= MENBIT_TODRAW + MENBIT_ISVIS;
+              _pStatus->index(254);
+              show(_pStatus);
+          // init menu items
+            if (_pMenu->count() > 0)
+              {
+                _ptmp = (MENUITEM_t*) pMenu->pFirst();
+                //do
+                for (uint8_t i=0 ; i < _pMenu->count() ; i++)
+                  {
+                    S3HEXVAL("    init menu .. ptmp i idx ", (uint32_t) _ptmp, i, _ptmp->index());
+                    // x/y pos
+                      _ptmp->boxpos.x = (_ptmp->menuid.scrcol - 1) * BOX_GRID;
+                      if (_ptmp->boxpos.x < 0)  { _ptmp->boxpos.x = 0; }
+
+                      _ptmp->boxpos.y  = ((_ptmp->menuid.scrrow - 1) * BOX_GRID) + 1;
+                      if (_ptmp->boxpos.y  < 0) { _ptmp->boxpos.y  = 0; }
+                    // w/h size
+                      _ptmp->boxsize.x  = (_ptmp->menuid.itemw) * BOX_GRID - 2;
+                      if (_ptmp->boxsize.x < BOX_GRID) { _ptmp->boxsize.x  = BOX_GRID; }
+
+                      _ptmp->boxsize.y  = BOX_GRID - 2;
+                          /*
+                            S4HEXVAL(" ptmp grid.x .y .w ",         (uint32_t) _ptmp,
+                                                                    _ptmp->menuid.scrcol,
+                                                                    _ptmp->menuid.scrrow,
+                                                                    _ptmp->menuid.itemw);
+                            S4HEXVAL("       pos.x .y .w .h      ", _ptmp->boxpos.x,
+                                                                    _ptmp->boxpos.y,
+                                                                    _ptmp->boxsize.x,
+                                                                    _ptmp->boxsize.y);
+                           */
+                    // menu ID
+                      _ptmp->menuid.menstat |= MENBIT_TODRAW;
+                        //if ((_ptmp->menuid.menlev == 0) || (_ptmp->menuid.menlev == MENLEV_ALL))
+                        //  {
+                        //    show(_ptmp);
+                        //  }
+                              //if (_ptmp != _pStatus)
+                                {
+                                  /*
+                                    S4HEXVAL(" init menu _ptmp index itemID menstat ",  (uint32_t) _ptmp,
+                                                                                        _ptmp->index(),
+                                                                                        _ptmp->menuid.itemID(),
+                                                                                        _ptmp->menuid.menstat);
+                                    S3VAL   ("           gridx gridy gridw          ",  _ptmp->menuid.scrcol,
+                                                                                        _ptmp->menuid.scrrow,
+                                                                                        _ptmp->menuid.itemw);
+                                    S4VAL   ("           posx  posy  sizew  sizeh   ",  _ptmp->boxpos.x,
+                                                                                        _ptmp->boxpos.y,
+                                                                                        _ptmp->boxsize.x,
+                                                                                        _ptmp->boxsize.y);
+                                   */
+                                }
+                    // next item
+                      //S2HEXVAL(" init menu vor pNext   ptmp pNext", (uint32_t) _ptmp, (uint32_t) _ptmp->pNext());
+                      _ptmp = (MENUITEM_t*) _ptmp->pNext();
+                  }
+              }
+            _isInit = TRUE;
+            //STXT("    init menu ready ");
+        }
+      void md_menu::begin(uint8_t doTask)
+        {
+          // start task
+            if (doTask)
+              {
+                startMenuTask();
+              }
+        }
+      // standard items
+      void md_menu::wrStatus(const char* msg, uint16_t msTOut, uint8_t colormode)
+        {
+          //S2VAL(" wrStatus .. pStatus text isInit ", msg, _isInit );
+          //SHEXVAL(" wrStatus pStatus text", (uint32_t) _pStatus);
+          if (_isInit)
+            {
+              if (msg != NULL)
+                {
+                  //STXT("       vor ptext ");
+                  _pStatus->boxtext.ptext = (char*) msg;
+                  _pStatus->menuid.menstat |= MENBIT_TODRAW;
+                  if (_TStat.TOut())
+                    {
+                      _pStatus->menuid.colmod = colormode;
+                          //STXT("       vor show ");
+                      show(_pStatus);
+                      _TStat.startT(msTOut);
+                    }
+                }
+            }
+          //STXT(" wrStatus end ");
+        }
+      void md_menu::wrTitle(const char *msg, uint8_t colormode)
+        {
+          STXT(" wrTitle ");
+          if (msg != NULL)
+            {
+              _pTitle->boxtext.ptext = (char*) msg;
+            }
+          _pTitle->menuid.colmod = colormode;
+          _pTitle->menuid.menstat |= MENBIT_TODRAW;
+          show(_pTitle);
+        }
+      void md_menu::run()
+        {
+          MENUITEM_t*  _ptmp = NULL;
+          // run screen
+            show(_pTitle);
+            show(_pStatus);
+          if (_isInit > FALSE)
+            {// show items
+              _ptmp = (MENUITEM_t*) _pMenu->pFirst();
+              for (uint8_t i = 0 ; i < _pMenu->count() ; i++)
+                {
+                  //S4HEXVAL(" .. run    ptmp idx lev stat  ", (uint32_t) _ptmp, _ptmp->index(), _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                  if ((_ptmp->menuid.menstat & MENBIT_TODRAW) == MENBIT_TODRAW)
+                    {
+                      if (_ptmp->menuid.menlev == _actMenu)
+                        {
+                          _ptmp->menuid.menstat |= MENBIT_ISVIS;
+                                //S3HEXVAL(" .. run    ptmp lev stat  ", (uint32_t) _ptmp, _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                                //S3VAL   ("    run .. x    y   w     ", _ptmp->boxpos.x,  _ptmp->boxpos.y,      _ptmp->boxsize.x );
+                          show(_ptmp);
+                                //S2HEXVAL("    run         lev stat  ", _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                        }
+                    }
+                  _ptmp = (MENUITEM_t*) _ptmp->pNext();
+                }
+            }
+        }
+      void md_menu::show(MENUITEM_t* pitem, uint8_t maxWidth)
+        {
+          int16_t      _tx,   _ty; // txtpos    [pixel]
+          uint16_t     _tw,   _th; // txtsize   [pixel]
+          uint8_t      _tlen, _maxlen = 0;   // txtlength [char count]
+          char         _ttmp[MENU_TXTMAX + 1];
+                  //S2HEXVAL(" .. show .. pitem isInit",(uint32_t) pitem, _isInit);
+          if ( (_isInit > FALSE) && (pitem))
+            {
+                  //STXT(" .. show .. pitem & isInit = TRUE ");
+              /*
+                S4HEXVAL(" .. show .. pItem, menstat, menstat & bits, bits ",
+                    (uint32_t) pitem,
+                    pitem->menuid.menstat,
+                    pitem->menuid.menstat & (MENBIT_ISVIS + MENBIT_TODRAW),
+                    MENBIT_ISVIS + MENBIT_TODRAW);
+               */
+              if (   (pitem->menuid.menstat & (MENBIT_ISVIS + MENBIT_TODRAW))
+                                           == (MENBIT_ISVIS + MENBIT_TODRAW))
+                {
+                  _tw = pitem->boxtext.txtsize * TXT_CHAR1_W;
+                  _th = pitem->boxtext.txtsize * TXT_CHAR1_H;
+                  strncpy(_ttmp,pitem->boxtext.ptext, MENU_TXTMAX);
+                  // calculate text x
+                  if (_tw > 0) { _maxlen = (uint8_t) ((pitem->boxsize.x - 2) / _tw); }
+                  if (_maxlen >= strlen(pitem->boxtext.ptext)) // text smaler than box width
+                    {
+                      _tlen = (uint8_t) strlen(pitem->boxtext.ptext);
+                    }
+                  else
+                    { // shrink text to maxlen
+                      _tlen = _maxlen;
+                            //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
+                            //STXT(" show  vor  ptxt[tlen] = 0");
+                      _ttmp[_tlen] = 0;
+                            //STXT(" show  nach ptxt[tlen] = 0");
+                    }
+                  _tw *= _tlen;
+                      //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
+                  switch(pitem->boxtext.align)
+                    {
+                      case TXT_CENTER:
+                          _tx = pitem->boxpos.x + ((pitem->boxsize.x - _tw) / 2);
+                        break;
+                      case TXT_RIGHT:
+                          _tx = pitem->boxpos.x + (pitem->boxsize.x - _tw) - 1;
+                        break;
+                      default: // TXT_LEFT
+                          _tx = pitem->boxpos.x + 1;
+                        break;
+                    }
+                  // calculate text y - only single row text
+                  _ty = pitem->boxpos.y + ((pitem->boxsize.y - _th) / 2);
+                      //S4HEXVAL("    show pitem _bx _by _bw ", (uint32_t) pitem , pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x);
+                      //S4VAL("    show _tx _ty _tw _th ", _tx, _ty, _tw, _th);
+                      //S4VAL("    show tlen len13 lentxt box.w ", _tlen, 13*pitem->boxtext.txtsize*TXT_CHAR1_W,
+                      //                                         strlen(pitem->boxtext.ptext), pitem->boxsize.x);
+                      //STXT(" show .. 2 ");
+                      //S3VAL(" show  posx posy sizex sizey ", pitem->boxpos.x,  pitem->boxpos.y,
+                      //                                       (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
+                  _pTFT->setTextSize(pitem->boxtext.txtsize);
+                  _pTFT->fillRect(pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x, pitem->boxsize.y,
+                                  (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
+                      //STXT(" show .. 3 ");
+                  _pTFT->setCursor(_tx, _ty);
+                      //STXT(" show .. 4 ");
+                  if (   (pitem->menuid.menstat & MENBIT_ISSEL) == MENBIT_ISSEL)
+                    {
+                      _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(COLMODE_BOXDEF));
+                    }
+                    else
+                    {
+                      _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(pitem->menuid.colmod));
+                    }
+                      //STXT(" show .. 5 ");
+                  _pTFT->print(_ttmp);
+                        //S2HEXVAL("   show  pitem menstat ", (uint32_t) pitem, pitem->menuid.menstat);
+                  pitem->menuid.menstat = pitem->menuid.menstat - MENBIT_TODRAW;
+                }
+            }
+                //STXT("  .. end ");
+        }
+      void md_menu::wrback()
+        {
+          _pTFT->fillRect( _backpos.x, _backpos.y, _backsize.x, _backsize.y, COL_BACK );
+        }
+      MENUITEM_t* md_menu::getItem(POINT_t* ptouchP)
+        {
+          MENUITEM_t* _pmy = (MENUITEM_t*) _pMenu->pFirst();
+          for (uint8_t i = 0; (i < _pMenu->count()) && (_pmy != NULL); i++ )
+            {
+              if ( _pmy->isItem(ptouchP) == TRUE)
+                {
+                  return _pmy;
+                }
+              _pmy = (MENUITEM_t*) _pmy->pNext();
+            }
+          if (_pStatus->isItem(ptouchP) == TRUE)
+            {
+              return _pStatus;
+            }
+          if (_pTitle->isItem(ptouchP) == TRUE)
+            {
+              return _pTitle;
+            }
+          return NULL;
+        }
+      void md_menu::drawEntry()
+        {
+          /*
+              void md_menu::drawEntry(const char* txt, uint8_t line, uint16_t color)
+                {
+                  //pgfx_->setColor(MD4_BLACK);
+                  pgfx_->drawRect(_x, _y[line], _ym[line], 16);
+                  pgfx_->commit();
+                  pgfx_->setFont(MENU_FONT);
+                  pgfx_->setColor(color);
+                  pgfx_->drawString(_x + 1, _y[line] + 1, txt);
+                  pgfx_->commit();
+            */
+        }
+      void md_menu::suspend()
+        { if (_pmenuTask != NULL)
+          {
+            disableLoopWDT();
+            vTaskSuspend( _pmenuTask );
+          }
+        }
+      void md_menu::resume()
+        { if (_pmenuTask != NULL) { vTaskResume( _pmenuTask ); } }
+
+  #ifdef NOT_USED
+
+    void    actLev(uint32_t val, uint8_t level)
       {
-        tft.setFreeFont(NORM_FONT);
-        tft.setFreeFont(BOLD_FONT);
-
-        key[col].initButton(&tft,
-                          KEY_X + col * (KEY_W + KEY_SPACING_X),
-                          KEY_Y /* + row * (KEY_H + KEY_SPACING_Y)*/, // x, y, w, h, outline, fill, text
-                          KEY_W, KEY_H, TFT_WHITE,
-                          keyColor[col], labelColor[col],
-                          keyLabel[col], KEY_TEXTSIZE);
-        key[col].drawButton();
       }
-      return ISOK;
-    }
 
-  bool md_touch::_drawStatus(char* outStat)
-    {
-      tft.fillRect(STAT_XLI, STAT_YOB, STAT_XRE, STAT_YUN, STAT_BCOL);
-      tft.setTextPadding(240);
-      //tft.setCursor(STAT_X, STAT_Y);
-      tft.setTextColor(STAT_FCOL, STAT_BCOL);
-      tft.setTextDatum(MC_DATUM);
+    uint8_t actLev(uint32_t val)
+      {
+        return true;
+      }
 
-      tft.setTextFont(1);
-      tft.setTextSize(2);
-      tft.drawString(outStat, STAT_XCENT, STAT_YCENT);
-      return ISOK;
-    }
+    void    oldLev(uint32_t val, uint8_t level)
+      {
+      }
 
-  //
-  // Print something in the mini status bar
-  bool md_touch::_clearTFT()
-    {
-      tft.fillScreen(DISP_BCOL);
-      return ISOK;
-    }
+    uint8_t oldLev(uint32_t val)
+      {
+        return true;
+      }
 
-  bool md_touch::_initTFT(const uint8_t csTFT)
-    {
-      pinMode(csTFT, OUTPUT);
-      digitalWrite(csTFT, LOW);
-      delay(1);  // Initialise the TFT screen
-      tft.init();
-      // Set the rotation before we calibrate
-      tft.setRotation(DISP_ORIENT);
-      // Calibrate the touch screen and retrieve the scaling factors
-      calTouch();
-      // Clear the screen
-      _clearTFT();
-      return ISOK;
-    }
+    void    actPage(uint32_t val, uint8_t page)
+      {
+      }
 
-  //
-  #endif
-  #endif
-  #endif // NOTREADY
+    uint8_t actPage(uint32_t val)
+      {
+        return true;
+      }
+
+    void    oldPage(uint32_t val, uint8_t page)
+      {
+      }
+
+    uint8_t oldPage(uint32_t val)
+      {
+        return true;
+      }
+
+      /*
+        void calibrate()
+          {
+            uint16_t x1, y1, x2, y2;
+            //uint16_t vi1, vj1, vi2, vj2;
+            uint8_t  isok = false;
+            calParams_t calPars;
+            char buf[80];
+
+            SOUTLN("Start calibration ...");
+            pts_->getCalibrationPoints(x1, y1, x2, y2);
+            SOUT("cal points "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(x2); SOUT(" "); SOUTLN(y2);
+            do // calib until plausibility
+              {
+                calibratePoint(x1, y1, calPars.vi1, calPars.vj1);
+                SOUT("cal p(1) "); SOUT(calPars.vi1); SOUT(" "); SOUTLN(calPars.vj1);
+                sleep(1);
+                //usleep(50000);
+                calibratePoint(x2, y2, calPars.dvi, calPars.dvj);
+                SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(calPars.dvi); SOUT(" "); SOUTLN(calPars.dvj);
+                pts_->setCalibration(&calPars);
+                //snprintf(buf, sizeof(buf), "%d,%d,%d,%d", (int)vi1, (int)vj1, (int)vi2, (int)vj2);
+                SOUT("buf '"); SOUTLN(buf);
+                // show result on touch
+                  pgfx_->fillBuffer(MD4_BLACK);
+                  pgfx_->setFont(ArialRoundedMTBold_14);
+                  pgfx_->setColor(MD4_YELLOW);
+                  pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
+                  pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
+                  pgfx_->commit();
+              }
+            while (!isok);
+            snprintf(buf, sizeof(buf), "%d/n%d/n%d/n%d/n%d/n%d/n", calPars.dx, calPars.dy,
+                                       calPars.vi1, calPars.vj1, calPars.dvi, calPars.dvj);
+            pmdt_->saveCalibration(buf, sizeof(buf));
+          }
+      */
+    // ----------------------------------------------------------------
+    /*
+        void bmp_pgm::init(mdGrafx *ptft, const char *palBmp)
+          {
+            SOUT(" bmp::init grafx "); SOUTHEX((uint32_t) ptft); SOUT(" bmp "); SOUTHEXLN((uint32_t) palBmp);
+            if (palBmp != NULL)
+              {
+                SOUT(" getBMPHeader ...");
+                _ptft = ptft;
+                _pbmp = palBmp;
+                _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
+                SOUTLN(" ready");
+              }
+          }
+      */
+
+    void bmp_pgm::draw(const char *palBmp ,int16_t x, int16_t y)  // left upper position
+      {
+        if ( (x >= 0) && (y >= 0) & (palBmp != NULL))
+          {
+            if ((_pbmp != NULL) && (_pbmp != palBmp))
+              { // clear old logo
+                _ptft->setColor(MD16_BLACK);
+                _ptft->fillRect(_posx, _posy, _head.width, _head.height);
+                _ptft->commit();
+              }
+            _posx = x;
+            _posy = y;
+            _pbmp = palBmp;
+            _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
+            _ptft->drawPalettedBitmapFromPgm(_posx, _posy, _pbmp);
+              /*
+                SOUT("draw icon addr "); SOUTHEX((uint32_t) _pbmp);
+                SOUT(" size "); SOUT(_head.width * _head.height + sizeof(BMPHeader_t));
+                SOUT(" bmpcolor "); SOUT(_head.bitDepth);
+                SOUT(" width "); SOUT(_head.width); SOUT(" height "); SOUTLN(_head.height);
+                */
+          }
+      }
+
+    #endif
+#endif // NOTREADY
