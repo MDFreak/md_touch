@@ -56,9 +56,9 @@
     #include <md_util.h>
     #include <md_spiffs.h>
     #include <XPT2046_Touchscreen.h>
-    #include <Adafruit_GFX.h>     //Grafik Bibliothek
+    #include <Adafruit_GFX.h>     // Grafik Bibliothek
     #include <Adafruit_ILI9341.h> // Display Treiber
-    #include <md_TouchEvent.h>    //Auswertung von Touchscreen Ereignissen
+    #include <md_TouchEvent.h>
     #include <AT_Display.h>
     #include <linked_list.hpp>
     #include <esp_task_wdt.h>
@@ -66,55 +66,82 @@
     #include <fonts\AT_BoldOblique9pt7b.h>
     #include <fonts\AT_Oblique9pt7b.h>
     #include <fonts\AT_Standard9pt7b.h>
+    #include <md_leds.h>          // color conversions to use
   // --- system
     #define WDT_TTIMEOUT 3
     #define TFT_FREQU    2000000
   // --- 2-dim point
-      // --- class tPoint - 2 dimensions
-        typedef struct POINT_t
-          {
-           	int16_t x;
-           	int16_t y;
-            bool operator==(POINT_t p)  { return ((p.x == x) && (p.y == y)); }
-            void operator= (POINT_t p)  { x = p.x; y = p.y; }
-            bool operator==(TS_Point p) { return ((p.x == x) && (p.y == y)); }
-            void operator= (TS_Point p) { x = p.x; y = p.y; }
-            virtual char *print2char15(char *buf)
-              {
-                sprintf(buf, "x %4i y %4i", x, y);
-                return buf;
-              }
-          } POINT_t;
+    // --- class tPoint - 2 dimensions
+      typedef struct POINT_t
+        {
+         	int16_t x;
+         	int16_t y;
+          bool operator==(POINT_t p)  { return ((p.x == x) && (p.y == y)); }
+          void operator= (POINT_t p)  { x = p.x; y = p.y; }
+          bool operator==(TS_Point p) { return ((p.x == x) && (p.y == y)); }
+          void operator= (TS_Point p) { x = p.x; y = p.y; }
+          virtual char *print2char15(char *buf)
+            {
+              sprintf(buf, "x %4i y %4i", x, y);
+              return buf;
+            }
+        } POINT_t;
   // --- color definitions
     // --- basic colors
       typedef enum md_colors : uint16_t
         {
-          MD_BLACK        = 0x0000u, /*   0,   0,   0 */
-          MD_NAVY         = 0x000Fu, /*   0,   0, 128 */
-          MD_DARKGREEN    = 0x03E0u, /*   0, 128,   0 */
-          MD_DARKCYAN     = 0x03EFu, /*   0, 128, 128 */
-          MD_MAROON       = 0x7800u, /* 128,   0,   0 */
-          MD_PURPLE       = 0x780Fu, /* 123,   0, 123 */
-          MD_OLIVE        = 0x7BE0u, /* 128, 128,   0 */
-          MD_LIGHTGREY    = 0xC618u, /* 192, 192, 192 */
-          MD_DARKGREY     = 0x7BEFu, /* 128, 128, 128 */
-          MD_BLUE         = 0x001Fu, /*   0,   0, 255 */
-          MD_GREEN        = 0x07E0u, /*   0, 255,   0 */
-          MD_CYAN         = 0x07FFu, /*   0, 255, 255 */
-          MD_RED          = 0xF800u, /* 255,   0,   0 */
-          MD_MAGENTA      = 0xF81Fu, /* 255,   0, 255 */
-          MD_YELLOW       = 0xFFE0u, /* 255, 255,   0 */
-          MD_WHITE        = 0xFFFFu, /* 255, 255, 255 */
-          MD_ORANGE       = 0xFD20u, /* 255, 165,   0 */
-          MD_GREENYELLOW  = 0xAFE5u /* 173, 255,  47 */
+          MD_BLACK          = COL16_BLACK,
+          //MD_OLIVE          = 0x7BE0u, /* 128, 128,   0 */
+          //MD_GREENYELLOW    = 0xAFE5u, /* 173, 255,  47 */
+          MD_OLIVE          = COL16_OLIVE,
+          MD_GREENYELLOW    = COL16_GREENYELLOW,
+          MD_RED_VERYLOW    = COL16_RED_VERYLOW,
+          MD_RED_LOW        = COL16_RED_LOW,
+          MD_RED_MEDIUM     = COL16_RED_MEDIUM,
+          MD_RED_HIGH       = COL16_RED_HIGH,
+          MD_GREEN_VERYLOW  = COL16_GREEN_VERYLOW,
+          MD_GREEN_LOW      = COL16_GREEN_LOW,
+          MD_GREEN_MEDIUM   = COL16_GREEN_MEDIUM,
+          MD_GREEN_HIGH     = COL16_GREEN_HIGH,
+          MD_BLUE_VERYLOW   = COL16_BLUE_VERYLOW,
+          MD_BLUE_LOW       = COL16_BLUE_LOW,
+          MD_BLUE_MEDIUM    = COL16_BLUE_MEDIUM,
+          MD_BLUE_HIGH      = COL16_BLUE_HIGH,
+          MD_YELLOW_VERYLOW = COL16_YELLOW_VERYLOW,
+          MD_YELLOW_LOW     = COL16_YELLOW_LOW,
+          MD_YELLOW_MEDIUM  = COL16_YELLOW_Medium,
+          MD_YELLOW_HIGH    = COL16_YELLOW_HIGH,
+          MD_ORANGE_VERYLOW = COL16_ORANGE_VERYLOW,
+          MD_ORANGE_LOW		  = COL16_ORANGE_LOW,
+          MD_ORANGE_MEDIUM  = COL16_ORANGE_MEDIUM,
+          MD_PURPLE_VERYLOW = COL16_PURPLE_VERYLOW,
+          MD_PURPLE_LOW		  = COL16_PURPLE_LOW,
+          MD_PURPLE_MEDIUM	= COL16_PURPLE_MEDIUM,
+          MD_PURPLE_HIGH		= COL16_PURPLE_HIGH,
+          MD_CYAN_VERYLOW	  = COL16_CYAN_VERYLOW,
+          MD_CYAN_LOW		    = COL16_CYAN_LOW,
+          MD_CYAN_MEDIUM		= COL16_CYAN_MEDIUM,
+          MD_CYAN_HIGH		  = COL16_CYAN_HIGH,
+          MD_GREY_VERYLOW	  = COL16_WHITE_VERYLOW,
+          MD_GREY_LOW		    = COL16_WHITE_LOW,
+          MD_GREY_MEDIUM	  = COL16_WHITE_MEDIUM,
+          MD_GREY_HIGH		  = COL16_WHITE_HIGH
         } MD_COLORS_t;
   // --- touchscreen
     // basics
       #define MINPRESSURE 10 // pressure to detect touch
+      //typedef enum : uint8_t
+      enum : uint8_t
+        {
+          TOUCHED_NOTOUCH = 0,
+          TOUCHED_SINGLE,
+          TOUCHED_LONG,
+          TOUCHED_DOUBLE
+        };
     // touch timing
       #define TOUCH_TASK_SLEEP_US 10000ul
       #define TOUCH_CLICK_TIME_MS 20
-      #define TOUCH_LONG_TIME_MS  400
+      #define TOUCH_LONG_TIME_MS  800
     // screen
       // orientation 0
         #define DEF_0_TFTW 240  // width in pixel
@@ -202,7 +229,7 @@
       #define MENU_TASK_SLEEP_US  10000ul
       #define MENU4BIT_MASK      0x0000000Fu
     // menu format
-      #define COL_BACK       MD_BLACK
+      #define COL_BACK       COL16_BLACK
       #define BOX_GRID       20
       #define BOX_X_MAX      12
       #define BOX_Y_MAX      16
@@ -227,10 +254,10 @@
       typedef enum BOXCOMMODE_t : uint8_t
         {
           COLMODE_BOXDEF = 0,
-          COLMODE_BOXSEL = 1,
-          COLMODE_BOXWRN = 2,
-          COLMODE_BOXEME = 3,
-          COLMODE_BOXMAX = 4,
+          COLMODE_BOXSEL,
+          COLMODE_BOXEME,
+          COLMODE_BOXPAS,
+          COLMODE_BOXMAX,
           COLMODE_BOXRDY
         } BOXCOLMODE_t;
     // menu colors
@@ -238,8 +265,8 @@
         {
           md_colors coldef;
           md_colors colsel;
-          md_colors colwrn;
           md_colors coleme;
+          md_colors colpas;
 
           md_colors col(uint8_t mode)
             {
@@ -247,17 +274,54 @@
                 {
                   case 0: return coldef;
                   case 1: return colsel;
-                  case 2: return colwrn;
-                  default: return coleme;
+                  case 2: return coleme;
+                  default: return colpas;
                 }
               return coldef;
             }
         } COLORS_t;
     // menu colors
-      static COLORS_t  defBoxCols  = { MD_BLACK, MD_BLACK , MD_BLACK, MD_RED };
-      static COLORS_t  defTxtCols  = { MD_DARKGREEN, MD_ORANGE, MD_RED, MD_GREENYELLOW };
-      static COLORS_t* pdefBoxCols = &defBoxCols;
-      static COLORS_t* pdefTxtCols = &defTxtCols;
+      const static COLORS_t  defBoxCols     = { MD_BLACK,
+                                                MD_BLACK,
+                                                MD_RED_MEDIUM,
+                                                MD_BLACK };
+      const static COLORS_t  statitBoxCols  = { MD_BLACK,
+                                                MD_BLACK ,
+                                                MD_RED_MEDIUM,
+                                                MD_BLACK };
+      const static COLORS_t  curBoxCols     = { MD_BLACK,
+                                                MD_BLACK ,
+                                                MD_RED_MEDIUM,
+                                                MD_BLACK };
+      const static COLORS_t  bmpBoxCols     = { MD_BLACK,
+                                                MD_BLACK ,
+                                                MD_RED_MEDIUM,
+                                                MD_BLACK };
+      const static COLORS_t  defTxtCols     = { MD_GREEN_MEDIUM,
+                                                MD_PURPLE_HIGH,
+                                                MD_GREENYELLOW,
+                                                MD_OLIVE };
+      const static COLORS_t  statitTxtCols  = { MD_GREEN_LOW,
+                                                MD_PURPLE_MEDIUM,
+                                                MD_GREENYELLOW,
+                                                MD_OLIVE };
+      const static COLORS_t  curTxtCols     = { MD_CYAN_MEDIUM,
+                                                MD_YELLOW_HIGH,
+                                                MD_GREENYELLOW,
+                                                MD_OLIVE };
+      const static COLORS_t  bmpTxtCols     = { MD_GREEN_HIGH,
+                                                MD_PURPLE_HIGH,
+                                                MD_GREENYELLOW,
+                                                MD_GREY_LOW
+                                              };
+      const static COLORS_t* pdefBoxCols    = &defBoxCols;
+      const static COLORS_t* pdefTxtCols    = &defTxtCols;
+      const static COLORS_t* pstatitBoxCols = &statitBoxCols;
+      const static COLORS_t* pstatitTxtCols = &statitTxtCols;
+      const static COLORS_t* pcurBoxCols    = &curBoxCols;
+      const static COLORS_t* pcurTxtCols    = &curTxtCols;
+      const static COLORS_t* pbmpBoxCols    = &bmpBoxCols;
+      const static COLORS_t* pbmpTxtCols    = &bmpTxtCols;
   // --- text defines
     // --- fonts
       #define TXT_CHAR1_W 6
@@ -278,7 +342,7 @@
           uint8_t   txtsize = 2;      // font scale
           uint8_t   align   = TXT_CENTER; // left - center - right
           uint8_t   tlenmax = 0;
-          COLORS_t* ptxtcol = pdefTxtCols;
+          COLORS_t* ptxtcol = (COLORS_t*) pdefTxtCols;
 
           char* getText() { return ptext; }
           void operator= (MENUTEXT_t t)
@@ -338,7 +402,7 @@
             MENUTYP_MASK_ITEM    = 0x00003800u, // bits  13-11
             MENUSCR_SHIFT_TYP    = 11,
                 MENVAL_RES7      = 7, // reserved
-                MENVAL_RES6      = 6, // reserved
+                MENVAL_CTRL      = 6, // menu control button
                 MENVAL_BITMAP    = 5, // bitmap
                 MENVAL_LINK      = 4, // link
                 MENVAL_INPLINK   = 3, // input & link (type VAL)
@@ -380,6 +444,8 @@
           uint8_t scrcol  = 1; // 5 bits - screen column grid [0 - SCRCOL_MAX]
           uint8_t menlev  = 0; // 3 bits - menu level
           uint8_t itemw   = BOX_X_MAX; // 5 bits - item width    grid [0 - SCRCOL_MAX]
+          uint8_t itemh   = 1; // 5 bits - item width    grid [0 - SCRCOL_MAX]
+          uint8_t bmpwh   = 16;
           uint8_t itemtyp = 0; // 3 bits - item type
           uint8_t valtyp  = 0; // 2 bits - value type
           uint8_t menstat = MENBIT_TODRAW; // 8 bits - menu act status
@@ -418,6 +484,7 @@
             MENUTEXT_t boxtext;
             ITEMID_t   menuid;
             uint8_t    maxtxtlen;
+            void*      pobj = NULL; // pointer to bitmap, function, menu item
 
             char*   printbox(char *p)
               {
@@ -465,11 +532,11 @@
 
             void init     (md_list* pMenu, MENUITEM_t* pTitle, MENUITEM_t* pStatus);
             void begin    (uint8_t doTask = TRUE);
-            void wrStatus (const char *msg = NULL, uint16_t msTOut = 10, uint8_t colormode = MD_DEF);
-            void wrStatus (String msg, uint16_t msTOut = 10, uint8_t colormode = MD_DEF)
+            void wrStatus (const char *msg = NULL, uint16_t msTOut = 1, uint8_t colormode = MD_DEF);
+            void wrStatus (String msg, uint16_t msTOut = 1, uint8_t colormode = MD_DEF)
               { wrStatus(msg.c_str(), msTOut, colormode); }
-            void wrTitle  (const char *msg = NULL, uint8_t colormode = MD_SEL);
-            void wrTitle  (String msg, uint8_t colormode = MD_SEL)
+            void wrTitle  (const char *msg = NULL, uint8_t colormode = MD_DEF);
+            void wrTitle  (String msg, uint8_t colormode = MD_DEF)
               { wrTitle(msg.c_str(), colormode); }
             void run();
             void show(MENUITEM_t* pitem = NULL, uint8_t maxWidth = FALSE);

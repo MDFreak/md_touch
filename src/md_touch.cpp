@@ -41,7 +41,7 @@
       static uint8_t      _touchlast = 0;
       static uint32_t     _touchTmp  = 0;
       static uint32_t     _rawTmp    = 0;
-    // touch menu variables
+    // menu task variables
       static uint32_t     _mlastT    = 0;
       static uint32_t     _mactT     = 0;
       static uint32_t     _mdiffT    = 0;
@@ -53,16 +53,17 @@
       // valid _tactRaw value cannot be 0 => handshake free
       // _tactXY value is not allowed     => handshake free
       // 0: wr: touch task / >0 rd->wr: menu task (!! _tactXY = 0; _tactRaw = 0)
-        IRAM_ATTR uint32_t _tactRaw       = 0; // last touched point (raw type)
-        IRAM_ATTR uint32_t _tactXY        = 0; // last touched point (TFT converted)
+        IRAM_ATTR uint32_t    _tactRaw      = 0; // last touched point (raw type)
+        IRAM_ATTR uint32_t    _tactXY       = 0; // last touched point (TFT converted)
       // 0: wr: menu task  / >0 rd->wr: poll function
-        IRAM_ATTR MENUITEM_t *_mtouchedID  = NULL; // menu info      -> execute menu
+        IRAM_ATTR MENUITEM_t *xtouchedItem   = NULL; // menu info      -> execute menu
+        IRAM_ATTR uint32_t    xtouchedType = 0;
     // control values
-        int8_t             _tCtrlTouch    = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
+        int8_t                _tCtrlTouch   = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
                                                           // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
                                                           // ext  TTASK_ON_HOLD: touch on hold
                                                           // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
-        int8_t             _tCtrlMenu     = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
+        int8_t                _tCtrlMenu    = TTASK_ON_RUN; // ext  TTASK_ON_RUN:  handshake off
                                                           // ext  TTASK_HSHAKE:  handshake , value treated, waiting for touch
                                                           // ext  TTASK_ON_HOLD: touch on hold
                                                           // task TTASK_NEWVAL:  handshake , value new, waiting for treatment
@@ -77,7 +78,7 @@
         //esp_task_wdt_init(WDT_TTIMEOUT, true); //enable panic so ESP32 restarts
         //esp_task_wdt_add(NULL);                //add current thread to WDT watch
 
-          disableLoopWDT();
+        disableLoopWDT();
         _tlastT = millis();
         while(TRUE)  // endless loop
           {
@@ -148,21 +149,19 @@
                       {
                         if (_isclicked > FALSE) // touch evaluated
                           {
-                            if (_tactRaw == 0) // handshake free
-                              {
-                                _tactXY   = _touchTmp;
-                                _tactRaw  = _rawTmp;
-                                      //S2HEXVAL(" output _rawTmp _touchTmp ", _rawTmp,     _touchTmp);
-                                      //S2VAL   (" _rawTmp x y ",             (_rawTmp >> TOUCH_HRAW_SHIFT) & TOUCH_HRAW_MASK , _rawTmp & TOUCH_HRAW_MASK);
-                                      //S3VAL   (" _touchTmp x y type",       (_touchTmp >> TOUCH_HPOINT_SHIFT) & TOUCH_HPOINT_MASK,
-                                      //                                           _touchTmp  & TOUCH_HPOINT_MASK,
-                                      //                                          (_touchTmp  & TOUCH_TYPE_MAX) >> TOUCHED_TYPE_SHIFT);
-                                // reset everything
-                                _touchlast = FALSE;
-                                _touchTmp  = 0;
-                                _rawTmp    = 0;
-                                _isclicked = FALSE;
-                              }
+                            while (_tactRaw > 0) { usleep(20); }// handshake blocked
+                            _tactXY   = _touchTmp;
+                            _tactRaw  = _rawTmp;
+                                  //S2HEXVAL(" output _rawTmp _touchTmp ", _rawTmp,     _touchTmp);
+                                  //S2VAL   (" _rawTmp x y ",             (_rawTmp >> TOUCH_HRAW_SHIFT) & TOUCH_HRAW_MASK , _rawTmp & TOUCH_HRAW_MASK);
+                                  //S3VAL   (" _touchTmp x y type",       (_touchTmp >> TOUCH_HPOINT_SHIFT) & TOUCH_HPOINT_MASK,
+                                  //                                           _touchTmp  & TOUCH_HPOINT_MASK,
+                                  //                                          (_touchTmp  & TOUCH_TYPE_MAX) >> TOUCHED_TYPE_SHIFT);
+                            // reset everything
+                            _touchlast = FALSE;
+                            _touchTmp  = 0;
+                            _rawTmp    = 0;
+                            _isclicked = FALSE;
                           }
                       }
                     usleep(TOUCH_TASK_SLEEP_US);
@@ -225,23 +224,42 @@
                     _pmdtouch->mapXY(&_menuP);
                           //S3VAL("       _menuP x y rot ", _menuP.x, _menuP.y, _rotation );
                     if (_pactItem == NULL)
-                      {
+                      { // handshake = free
                         _pactItem = _pmdmenu->getItem(&_menuP);
                             if (_pactItem == NULL)
                               {
-                                S3VAL("  touch field x y long ", _menuP.x, _menuP.y, _tactXY);
-                                if (_tactXY == 2) { sprintf(_out, "tchL %d %d", _menuP.x, _menuP.y); }
-                                else              { sprintf(_out, "tch %d %d", _menuP.x, _menuP.y); }
+                                if (_tactXY == TOUCHED_LONG)
+                                  {
+                                    sprintf(_out, "tchL %d %d", _menuP.x, _menuP.y);
+                                    //S2VAL("  touch long field x y long ", _menuP.x, _menuP.y);
+                                  }
+                                else
+                                  {
+                                    sprintf(_out, "tch %d %d", _menuP.x, _menuP.y);
+                                    //S2VAL("  touch      field x y long ", _menuP.x, _menuP.y);
+                                  }
                                 _pmdmenu->wrStatus(_out, 2000);
                               }
                             else
                               {
-                                _mtouchedID = _pactItem;
-                                      S4VAL("  touch       x y idx long ", _menuP.x, _menuP.y, _pactItem->index(), _tactXY);
-                                      if (_tactXY == 2) { sprintf(_out, "tchL %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index()); }
-                                      else              { sprintf(_out, "tch %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index()); }
-                                      _pmdmenu->wrStatus(_out, 2000);
-                                _pactItem   = NULL;
+                                while (xtouchedType > TOUCHED_NOTOUCH) { usleep(20); }
+                                  { // handshake xtouchedType is free
+                                    xtouchedItem = _pactItem;
+                                    xtouchedType = _tactXY;
+                                          if (_tactXY == 2)
+                                            {
+                                              sprintf(_out, "tchL %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index());
+                                              //S3VAL("  touch long  x y idx ", _menuP.x, _menuP.y, _pactItem->index());
+                                            }
+                                          else
+                                            {
+                                              sprintf(_out, "tch %d %d idx %d ", _menuP.x, _menuP.y, _pactItem->index());
+                                              //S3VAL("  touch       x y idx ", _menuP.x, _menuP.y, _pactItem->index());
+                                            }
+                                          _pmdmenu->wrStatus(_out, 2000);
+                                    _pactItem = NULL;
+                                    _tactXY   = TOUCHED_NOTOUCH;
+                                  }
                               }
                       }
                     _tactXY  = 0;
@@ -393,7 +411,7 @@
                 digitalWrite(_ledpin, _LED_ON); // switch on backlight
                 _pTFT->begin(TFT_FREQU);
                 _pTFT->setRotation(_rotation);
-                _pTFT->fillScreen(MD_GREEN);
+                _pTFT->fillScreen(MD_GREEN_MEDIUM);
                 usleep(20000);
                 _pTFT->fillScreen(MD_OLIVE);
                 //_pTFT->setFont(MENU_FONT);
@@ -511,15 +529,15 @@
                     // draw buttons
                       STXT(" draw buttons ");
                       _pTFT->setTextSize(2);
-                      _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
-                      _pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED);
+                      _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED_MEDIUM);
+                      _pTFT->drawRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_RED_MEDIUM);
                       _pTFT->setCursor(butCal[0] + 6, butCal[1] + 8);
-                      _pTFT->setTextColor(MD_YELLOW);
+                      _pTFT->setTextColor(MD_YELLOW_MEDIUM);
                       _pTFT->print("Calib");
-                      _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN);
-                      _pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED);
+                      _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_GREEN_MEDIUM);
+                      _pTFT->drawRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_RED_MEDIUM);
                       _pTFT->setCursor(butExit[0] + 4, butExit[1] + 8);
-                      _pTFT->setTextColor(MD_BLUE);
+                      _pTFT->setTextColor(MD_BLUE_MEDIUM);
                       _pTFT->print("Done");
                     // clear interface
                       _tactXY  = 0;
@@ -563,8 +581,8 @@
                               {  // exit calibration routine
                                 STXT(" Calib done");
                                 doExit = TRUE;
-                                _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, MD_BLACK);
-                                _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, MD_BLACK);
+                                _pTFT->fillRoundRect(butCal[0], butCal[1], butCal[2], butCal[3], 2, COL16_BLACK);
+                                _pTFT->fillRoundRect(butExit[0], butExit[1], butExit[2], butExit[3], 2, COL16_BLACK);
                               }
                             usleep(500000);
                           }
@@ -684,7 +702,8 @@
                       _ptmp->boxsize.x  = (_ptmp->menuid.itemw) * BOX_GRID - 2;
                       if (_ptmp->boxsize.x < BOX_GRID) { _ptmp->boxsize.x  = BOX_GRID; }
 
-                      _ptmp->boxsize.y  = BOX_GRID - 2;
+                      _ptmp->boxsize.y  = (_ptmp->menuid.itemh) * BOX_GRID - 2;
+                      if (_ptmp->boxsize.y < BOX_GRID) { _ptmp->boxsize.y  = BOX_GRID; }
                           /*
                             S4HEXVAL(" ptmp grid.x .y .w ",         (uint32_t) _ptmp,
                                                                     _ptmp->menuid.scrcol,
@@ -750,7 +769,7 @@
                       _pStatus->menuid.colmod = colormode;
                           //STXT("       vor show ");
                       show(_pStatus);
-                      _TStat.startT(msTOut);
+                      //_TStat.startT(msTOut);
                     }
                 }
             }
@@ -770,29 +789,161 @@
       void md_menu::run()
         {
           MENUITEM_t*  _ptmp = NULL;
+          String _tmp;
+          if (_isInit == FALSE) { return; }
+          // evaluate touch event to process
+            if (xtouchedType > TOUCHED_NOTOUCH)
+              { // touchevent to process
+                if (xtouchedItem != NULL) // menu item touched
+                  {
+                    switch (xtouchedType)
+                      {
+                        case TOUCHED_SINGLE:
+                            // switch selection
+                            // switch (xtouchedItem->menuid.colmod)
+                            switch (xtouchedItem->menuid.itemtyp)
+                              {
+                                case MENVAL_TTEXT:
+                                  break;
+                                case MENVAL_OUTVAL:
+                                case MENVAL_IOLABEL:
+                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
+                                      {
+                                        xtouchedItem->menuid.colmod   = COLMODE_BOXSEL;
+                                        if (xtouchedItem->pobj != NULL)
+                                          {
+                                            ((MENUITEM_t*) xtouchedItem->pobj)->menuid.colmod   = COLMODE_BOXSEL;
+                                          }
+                                      }
+                                    else
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                        if (xtouchedItem->pobj != NULL)
+                                          {
+                                            ((MENUITEM_t*) xtouchedItem->pobj)->menuid.colmod = COLMODE_BOXDEF;
+                                          }
+                                      }
+                                    if (xtouchedItem->pobj != NULL)
+                                      {
+                                        ((MENUITEM_t*) xtouchedItem->pobj)->menuid.menstat |= MENBIT_TODRAW;
+                                      }
+                                  break;
+                                case MENVAL_INPLINK: break;
+                                case MENVAL_LINK:    break;
+                                case MENVAL_BITMAP:
+                                    //STXT(" SINGLE CTRL");
+                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
+                                      {
+                                        xtouchedItem->pobj = (void*) pbmp32_notsmil;
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXSEL;
+                                      }
+                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXSEL)
+                                      {
+                                        xtouchedItem->pobj = (void*) pbmp32_frowny;
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXEME;
+                                      }
+                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXEME)
+                                      {
+                                        xtouchedItem->pobj = (void*) pbmp32_smiley;
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
+                                      }
+                                    else
+                                      {
+                                        xtouchedItem->pobj = (void*) pbmp32_smiley;
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                      }
+
+                                  break;
+                                case MENVAL_CTRL:
+                                    STXT(" SINGLE CTRL");
+                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXSEL;
+                                      }
+                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXSEL)
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXEME;
+                                      }
+                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXEME)
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
+                                      }
+                                    else
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                      }
+                                  break;
+                              }
+                            xtouchedItem->menuid.menstat |= MENBIT_TODRAW;
+                          break;
+                        case TOUCHED_LONG:
+                            switch (xtouchedItem->menuid.itemtyp)
+                              {
+                                case MENVAL_TTEXT:
+                                  break;
+                                case MENVAL_OUTVAL:
+                                case MENVAL_IOLABEL:
+                                    switch (xtouchedItem->menuid.colmod)
+                                      {
+                                        case COLMODE_BOXDEF:
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXEME;
+                                          break;
+                                        default:
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                          break;
+                                      }
+                                  break;
+                                case MENVAL_BITMAP:
+                                      xtouchedItem->pobj = (void*) pbmp32_smiley;
+                                      xtouchedItem->menuid.colmod == COLMODE_BOXDEF;
+                                  break;
+                                case MENVAL_CTRL:
+                                    if (xtouchedItem->menuid.colmod < COLMODE_BOXPAS)
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
+                                      }
+                                    else
+                                      {
+                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                      }
+                                  break;
+                              }
+                            xtouchedItem->menuid.menstat |= MENBIT_TODRAW;
+                          break;
+                      }
+                  }
+                else // no menu item touched
+                  {
+                    switch (xtouchedType)
+                      {
+                        case TOUCHED_SINGLE: _tmp = "tchs ", _menuP.x, "/", _menuP.y; break;
+                        case TOUCHED_LONG:   _tmp = "tchl ", _menuP.x, "/", _menuP.y; break;
+                      }
+                    wrStatus(_tmp);
+                  }
+                xtouchedItem = NULL;
+                xtouchedType = TOUCHED_NOTOUCH;
+              }
           // run screen
             show(_pTitle);
             show(_pStatus);
-          if (_isInit > FALSE)
-            {// show items
-              _ptmp = (MENUITEM_t*) _pMenu->pFirst();
-              for (uint8_t i = 0 ; i < _pMenu->count() ; i++)
-                {
-                  //S4HEXVAL(" .. run    ptmp idx lev stat  ", (uint32_t) _ptmp, _ptmp->index(), _ptmp->menuid.menlev, _ptmp->menuid.menstat);
-                  if ((_ptmp->menuid.menstat & MENBIT_TODRAW) == MENBIT_TODRAW)
-                    {
-                      if (_ptmp->menuid.menlev == _actMenu)
-                        {
-                          _ptmp->menuid.menstat |= MENBIT_ISVIS;
-                                //S3HEXVAL(" .. run    ptmp lev stat  ", (uint32_t) _ptmp, _ptmp->menuid.menlev, _ptmp->menuid.menstat);
-                                //S3VAL   ("    run .. x    y   w     ", _ptmp->boxpos.x,  _ptmp->boxpos.y,      _ptmp->boxsize.x );
-                          show(_ptmp);
-                                //S2HEXVAL("    run         lev stat  ", _ptmp->menuid.menlev, _ptmp->menuid.menstat);
-                        }
-                    }
-                  _ptmp = (MENUITEM_t*) _ptmp->pNext();
-                }
-            }
+            _ptmp = (MENUITEM_t*) _pMenu->pFirst();
+            for (uint8_t i = 0 ; i < _pMenu->count() ; i++)
+              {
+                //S4HEXVAL(" .. run    ptmp idx lev stat  ", (uint32_t) _ptmp, _ptmp->index(), _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                if ((_ptmp->menuid.menstat & MENBIT_TODRAW) == MENBIT_TODRAW)
+                  {
+                    if (_ptmp->menuid.menlev == _actMenu)
+                      {
+                        _ptmp->menuid.menstat |= MENBIT_ISVIS;
+                              //S3HEXVAL(" .. run    ptmp lev stat  ", (uint32_t) _ptmp, _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                              //S3VAL   ("    run .. x    y   w     ", _ptmp->boxpos.x,  _ptmp->boxpos.y,      _ptmp->boxsize.x );
+                        show(_ptmp);
+                              //S2HEXVAL("    run         lev stat  ", _ptmp->menuid.menlev, _ptmp->menuid.menstat);
+                      }
+                  }
+                _ptmp = (MENUITEM_t*) _ptmp->pNext();
+              }
         }
       void md_menu::show(MENUITEM_t* pitem, uint8_t maxWidth)
         {
@@ -817,61 +968,67 @@
                   _tw = pitem->boxtext.txtsize * TXT_CHAR1_W;
                   _th = pitem->boxtext.txtsize * TXT_CHAR1_H;
                   strncpy(_ttmp,pitem->boxtext.ptext, MENU_TXTMAX);
-                  // calculate text x
-                  if (_tw > 0) { _maxlen = (uint8_t) ((pitem->boxsize.x - 2) / _tw); }
-                  if (_maxlen >= strlen(pitem->boxtext.ptext)) // text smaler than box width
+                  switch (pitem->menuid.itemtyp)
                     {
-                      _tlen = (uint8_t) strlen(pitem->boxtext.ptext);
-                    }
-                  else
-                    { // shrink text to maxlen
-                      _tlen = _maxlen;
-                            //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
-                            //STXT(" show  vor  ptxt[tlen] = 0");
-                      _ttmp[_tlen] = 0;
-                            //STXT(" show  nach ptxt[tlen] = 0");
-                    }
-                  _tw *= _tlen;
-                      //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
-                  switch(pitem->boxtext.align)
-                    {
-                      case TXT_CENTER:
-                          _tx = pitem->boxpos.x + ((pitem->boxsize.x - _tw) / 2);
+                      case MENVAL_TTEXT:
+                      case MENVAL_IOLABEL:
+                      case MENVAL_OUTVAL:
+                          // calculate text x
+                            if (_tw > 0) { _maxlen = (uint8_t) ((pitem->boxsize.x - 2) / _tw); }
+                            if (_maxlen >= strlen(pitem->boxtext.ptext)) // text smaler than box width
+                              {
+                                _tlen = (uint8_t) strlen(pitem->boxtext.ptext);
+                              }
+                            else
+                              { // shrink text to maxlen
+                                _tlen = _maxlen;
+                                      //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
+                                      //STXT(" show  vor  ptxt[tlen] = 0");
+                                _ttmp[_tlen] = 0;
+                                      //STXT(" show  nach ptxt[tlen] = 0");
+                              }
+                            _tw *= _tlen;
+                                //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
+                            switch(pitem->boxtext.align)
+                              {
+                                case TXT_CENTER:
+                                    _tx = pitem->boxpos.x + ((pitem->boxsize.x - _tw) / 2);
+                                  break;
+                                case TXT_RIGHT:
+                                    _tx = pitem->boxpos.x + (pitem->boxsize.x - _tw) - 1;
+                                  break;
+                                default: // TXT_LEFT
+                                    _tx = pitem->boxpos.x + 1;
+                                  break;
+                              }
+                          // calculate text y - only single row text
+                            _ty = pitem->boxpos.y + ((pitem->boxsize.y - _th) / 2);
+                                //S4HEXVAL("    show pitem _bx _by _bw ", (uint32_t) pitem , pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x);
+                                //S4VAL("    show _tx _ty _tw _th ", _tx, _ty, _tw, _th);
+                                //S4VAL("    show tlen len13 lentxt box.w ", _tlen, 13*pitem->boxtext.txtsize*TXT_CHAR1_W,
+                                //                                         strlen(pitem->boxtext.ptext), pitem->boxsize.x);
+                                //STXT(" show .. 2 ");
+                                //S3VAL(" show  posx posy sizex sizey ", pitem->boxpos.x,  pitem->boxpos.y,
+                                //                                       (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
+                            _pTFT->setCursor(_tx, _ty);
+                          // write box
+                            _pTFT->fillRect(pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x, pitem->boxsize.y,
+                                            (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
+                            _pTFT->setTextSize(pitem->boxtext.txtsize);
+                            _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(pitem->menuid.colmod));
+                            _pTFT->print(_ttmp);
+                                //S2HEXVAL("   show  pitem menstat ", (uint32_t) pitem, pitem->menuid.menstat);
                         break;
-                      case TXT_RIGHT:
-                          _tx = pitem->boxpos.x + (pitem->boxsize.x - _tw) - 1;
+                      case MENVAL_BITMAP:
+                      case MENVAL_CTRL:
+                          _pTFT->drawBitmap(pitem->boxpos.x + 1,  pitem->boxpos.y + 1, (uint8_t*) pitem->pobj,
+                                            pitem->menuid.bmpwh, pitem->menuid.bmpwh,
+                                            pitem->boxtext.ptxtcol->col(pitem->menuid.colmod),
+                                            pitem->pboxcols->col(pitem->menuid.colmod));
                         break;
-                      default: // TXT_LEFT
-                          _tx = pitem->boxpos.x + 1;
-                        break;
                     }
-                  // calculate text y - only single row text
-                  _ty = pitem->boxpos.y + ((pitem->boxsize.y - _th) / 2);
-                      //S4HEXVAL("    show pitem _bx _by _bw ", (uint32_t) pitem , pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x);
-                      //S4VAL("    show _tx _ty _tw _th ", _tx, _ty, _tw, _th);
-                      //S4VAL("    show tlen len13 lentxt box.w ", _tlen, 13*pitem->boxtext.txtsize*TXT_CHAR1_W,
-                      //                                         strlen(pitem->boxtext.ptext), pitem->boxsize.x);
-                      //STXT(" show .. 2 ");
-                      //S3VAL(" show  posx posy sizex sizey ", pitem->boxpos.x,  pitem->boxpos.y,
-                      //                                       (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
-                  _pTFT->setTextSize(pitem->boxtext.txtsize);
-                  _pTFT->fillRect(pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x, pitem->boxsize.y,
-                                  (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
-                      //STXT(" show .. 3 ");
-                  _pTFT->setCursor(_tx, _ty);
-                      //STXT(" show .. 4 ");
-                  if (   (pitem->menuid.menstat & MENBIT_ISSEL) == MENBIT_ISSEL)
-                    {
-                      _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(COLMODE_BOXDEF));
-                    }
-                    else
-                    {
-                      _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(pitem->menuid.colmod));
-                    }
-                      //STXT(" show .. 5 ");
-                  _pTFT->print(_ttmp);
-                        //S2HEXVAL("   show  pitem menstat ", (uint32_t) pitem, pitem->menuid.menstat);
-                  pitem->menuid.menstat = pitem->menuid.menstat - MENBIT_TODRAW;
+                  // reset flags
+                    pitem->menuid.menstat = pitem->menuid.menstat - MENBIT_TODRAW;
                 }
             }
                 //STXT("  .. end ");
@@ -923,7 +1080,9 @@
           }
         }
       void md_menu::resume()
-        { if (_pmenuTask != NULL) { vTaskResume( _pmenuTask ); } }
+        {
+          if (_pmenuTask != NULL) { vTaskResume( _pmenuTask ); }
+        }
 
   #ifdef NOT_USED
 
