@@ -632,7 +632,7 @@
           MENUITEM_t*  _ptmp = NULL;
           STXT(" .. init menu .. ");
           // init menu basics
-            //_itemCnt  = itemCnt;
+            //_itCnt  = itCnt;
             _pMenu    = pMenu;
             _pTitle   = pTitle;
             _pStatus  = pStatus;
@@ -652,17 +652,17 @@
               _pTitle->boxpos.y = (_pTitle->menuid.scrrow - 1) * BOX_GRID;
               if (_pTitle->boxpos.y  < 0) { _pTitle->boxpos.y = 0; }
             // w h size
-              _pTitle->boxsize.x  = (_pTitle->menuid.itemw) * BOX_GRID;
+              _pTitle->boxsize.x  = (_pTitle->menuid.itw) * BOX_GRID;
               if (_pTitle->boxsize.x < BOX_GRID) { _pTitle->boxsize.x  = BOX_GRID; }
               _pTitle->boxsize.y = BOX_GRID - 1;
-                //S3VAL("      title grid.x .y .w .h ", _pTitle->menuid.scrcol, _pTitle->menuid.scrrow, _pTitle->menuid.itemw);
+                //S3VAL("      title grid.x .y .w .h ", _pTitle->menuid.scrcol, _pTitle->menuid.scrrow, _pTitle->menuid.itw);
                 //S4VAL("      title  pos.x .y .w .h ", _pTitle->boxpos.x,  _pTitle->boxpos.y,  _pTitle->boxsize.x,  _pTitle->boxsize.y);
-                //S2HEXVAL("    init title      itemID menstat ", _pTitle->menuid.itemID(), _pTitle->menuid.menstat);
+                //S2HEXVAL("    init title      itID menstat ", _pTitle->menuid.itID(), _pTitle->menuid.menstat);
             // menu ID
               _pTitle->menuid.menstat |= MENBIT_TODRAW;
-              _pTitle->menuid.menstat |= MENBIT_ISVIS;
+              //_pTitle->menuid.menstat |= MENBIT_ISVIS;
               _pTitle->index(255);
-                  //S2HEXVAL(" init title nach itemID ISVIS ", _pTitle->menuid.menstat, MENBIT_ISVIS);
+                  //S2HEXVAL(" init title nach itID ISVIS ", _pTitle->menuid.menstat, MENBIT_ISVIS);
             show(_pTitle);
           // init & show status box
             // x/y pos
@@ -673,15 +673,15 @@
               _pStatus->boxpos.y  = ((_pStatus->menuid.scrrow - 1) * BOX_GRID) + 1;
               if (_pStatus->boxpos.y  < 0) { _pStatus->boxpos.y  = 0; }
             // w/h size
-              _pStatus->boxsize.x  = (_pStatus->menuid.itemw) * BOX_GRID;
+              _pStatus->boxsize.x  = (_pStatus->menuid.itw) * BOX_GRID;
               if (_pStatus->boxsize.x < BOX_GRID) { _pStatus->boxsize.x  = BOX_GRID; }
 
               _pStatus->boxsize.y  = BOX_GRID - 1;
-                  //S3VAL("      status grid.x .y .w .h ", _pStatus->menuid.scrcol, _pStatus->menuid.scrrow, _pStatus->menuid.itemw);
+                  //S3VAL("      status grid.x .y .w .h ", _pStatus->menuid.scrcol, _pStatus->menuid.scrrow, _pStatus->menuid.itw);
                   //S4VAL("      status  pos.x .y .w .h ", _pStatus->boxpos.x,  _pStatus->boxpos.y,  _pStatus->boxsize.x,  _pStatus->boxsize.y);
-                  //S2HEXVAL("    init status      itemID menstat ", _pStatus->menuid.itemID(), _pStatus->menuid.menstat);
+                  //S2HEXVAL("    init status      itID menstat ", _pStatus->menuid.itID(), _pStatus->menuid.menstat);
               // menu ID
-              _pStatus->menuid.menstat |= MENBIT_TODRAW + MENBIT_ISVIS;
+              _pStatus->menuid.menstat |= MENBIT_TODRAW; //+ MENBIT_ISVIS;
               _pStatus->index(254);
               show(_pStatus);
           // init menu items
@@ -691,7 +691,7 @@
                 //do
                 for (uint8_t i=0 ; i < _pMenu->count() ; i++)
                   {
-                    S3HEXVAL("    init menu .. ptmp i idx ", (uint32_t) _ptmp, i, _ptmp->index());
+                      S4HEXVAL("    init menu .. idx page _pages _rows[page]", _ptmp->index(), _ptmp->menuid.menpage, _pages, _rows[_ptmp->menuid.menpage]);
                     // x/y pos
                       _ptmp->boxpos.x = (_ptmp->menuid.scrcol - 1) * BOX_GRID;
                       if (_ptmp->boxpos.x < 0)  { _ptmp->boxpos.x = 0; }
@@ -699,44 +699,64 @@
                       _ptmp->boxpos.y  = ((_ptmp->menuid.scrrow - 1) * BOX_GRID) + 1;
                       if (_ptmp->boxpos.y  < 0) { _ptmp->boxpos.y  = 0; }
                     // w/h size
-                      _ptmp->boxsize.x  = (_ptmp->menuid.itemw) * BOX_GRID - 2;
-                      if (_ptmp->boxsize.x < BOX_GRID) { _ptmp->boxsize.x  = BOX_GRID; }
+                      if ((_ptmp->menuid.ittyp == MENTYP_CTRL) || (_ptmp->menuid.ittyp == MENTYP_BITMAP))
+                        {
+                          _ptmp->boxsize.x  = (_ptmp->menuid.itw) * BOX_GRID;
+                          if (_ptmp->boxsize.x < BOX_GRID) { _ptmp->boxsize.x  = BOX_GRID; }
 
-                      _ptmp->boxsize.y  = (_ptmp->menuid.itemh) * BOX_GRID - 2;
-                      if (_ptmp->boxsize.y < BOX_GRID) { _ptmp->boxsize.y  = BOX_GRID; }
+                          _ptmp->boxsize.y  = (_ptmp->menuid.ith) * BOX_GRID;
+                          if (_ptmp->boxsize.y < BOX_GRID) { _ptmp->boxsize.y  = BOX_GRID; }
+                        }
+                      else
+                        {
+                          _ptmp->boxsize.x  = (_ptmp->menuid.itw) * BOX_GRID - 2;
+                          if (_ptmp->boxsize.x < BOX_GRID) { _ptmp->boxsize.x  = BOX_GRID; }
+
+                          _ptmp->boxsize.y  = (_ptmp->menuid.ith) * BOX_GRID - 2;
+                          if (_ptmp->boxsize.y < BOX_GRID) { _ptmp->boxsize.y  = BOX_GRID; }
+                        }
                           /*
                             S4HEXVAL(" ptmp grid.x .y .w ",         (uint32_t) _ptmp,
                                                                     _ptmp->menuid.scrcol,
                                                                     _ptmp->menuid.scrrow,
-                                                                    _ptmp->menuid.itemw);
+                                                                    _ptmp->menuid.itw);
                             S4HEXVAL("       pos.x .y .w .h      ", _ptmp->boxpos.x,
                                                                     _ptmp->boxpos.y,
                                                                     _ptmp->boxsize.x,
                                                                     _ptmp->boxsize.y);
                            */
+                    // inc page and row conters (exept bitmaps and controls)
+                      if (_ptmp->menuid.menpage != MENPAGE_ALL)
+                        {
+                          if (_ptmp->menuid.menpage >= _pages)
+                              { _pages = _ptmp->menuid.menpage + 1; }
+                          if ( (_ptmp->menuid.scrrow - MENU_ROW1) >= _rows[_ptmp->menuid.menpage] )
+                              { _rows[_ptmp->menuid.menpage]++; }
+                        }
                     // menu ID
                       _ptmp->menuid.menstat |= MENBIT_TODRAW;
-                        //if ((_ptmp->menuid.menlev == 0) || (_ptmp->menuid.menlev == MENLEV_ALL))
+                      S4HEXVAL("    init menu .. idx page _pages _rows[page]", _ptmp->index(), _ptmp->menuid.menpage, _pages, _rows[_ptmp->menuid.menpage]);
+                        //if ((_ptmp->menuid.menpage == 0) || (_ptmp->menuid.menpage == MENPAGE_ALL))
                         //  {
                         //    show(_ptmp);
                         //  }
                               //if (_ptmp != _pStatus)
                                 {
                                   /*
-                                    S4HEXVAL(" init menu _ptmp index itemID menstat ",  (uint32_t) _ptmp,
+                                    S4HEXVAL(" init menu _ptmp index itID menstat ",  (uint32_t) _ptmp,
                                                                                         _ptmp->index(),
-                                                                                        _ptmp->menuid.itemID(),
+                                                                                        _ptmp->menuid.itID(),
                                                                                         _ptmp->menuid.menstat);
                                     S3VAL   ("           gridx gridy gridw          ",  _ptmp->menuid.scrcol,
                                                                                         _ptmp->menuid.scrrow,
-                                                                                        _ptmp->menuid.itemw);
+                                                                                        _ptmp->menuid.itw);
                                     S4VAL   ("           posx  posy  sizew  sizeh   ",  _ptmp->boxpos.x,
                                                                                         _ptmp->boxpos.y,
                                                                                         _ptmp->boxsize.x,
                                                                                         _ptmp->boxsize.y);
                                    */
                                 }
-                    // next item
+                    // next it
                       //S2HEXVAL(" init menu vor pNext   ptmp pNext", (uint32_t) _ptmp, (uint32_t) _ptmp->pNext());
                       _ptmp = (MENUITEM_t*) _ptmp->pNext();
                   }
@@ -752,7 +772,7 @@
                 startMenuTask();
               }
         }
-      // standard items
+      // standard its
       void md_menu::wrStatus(const char* msg, uint16_t msTOut, uint8_t colormode)
         {
           //S2VAL(" wrStatus .. pStatus text isInit ", msg, _isInit );
@@ -788,8 +808,9 @@
         }
       void md_menu::run()
         {
-          MENUITEM_t*  _ptmp = NULL;
-          String _tmp;
+          MENUITEM_t* _ptmp = NULL;
+          uint8_t     _new  = FALSE;
+          String      _tmp;
           if (_isInit == FALSE) { return; }
           // evaluate touch event to process
             if (xtouchedType > TOUCHED_NOTOUCH)
@@ -798,106 +819,119 @@
                   {
                     switch (xtouchedType)
                       {
-                        case TOUCHED_SINGLE:
-                            // switch selection
-                            // switch (xtouchedItem->menuid.colmod)
-                            switch (xtouchedItem->menuid.itemtyp)
+                        case TOUCHED_SINGLE: // short touched
+                            if (xtouchedItem == pitTitle)
                               {
-                                case MENVAL_TTEXT:
-                                  break;
-                                case MENVAL_OUTVAL:
-                                case MENVAL_IOLABEL:
-                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
-                                      {
-                                        xtouchedItem->menuid.colmod   = COLMODE_BOXSEL;
-                                        if (xtouchedItem->pobj != NULL)
-                                          {
-                                            ((MENUITEM_t*) xtouchedItem->pobj)->menuid.colmod   = COLMODE_BOXSEL;
-                                          }
-                                      }
-                                    else
-                                      {
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
-                                        if (xtouchedItem->pobj != NULL)
-                                          {
-                                            ((MENUITEM_t*) xtouchedItem->pobj)->menuid.colmod = COLMODE_BOXDEF;
-                                          }
-                                      }
-                                    if (xtouchedItem->pobj != NULL)
-                                      {
-                                        ((MENUITEM_t*) xtouchedItem->pobj)->menuid.menstat |= MENBIT_TODRAW;
-                                      }
-                                  break;
-                                case MENVAL_INPLINK: break;
-                                case MENVAL_LINK:    break;
-                                case MENVAL_BITMAP:
-                                    //STXT(" SINGLE CTRL");
-                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
-                                      {
-                                        xtouchedItem->pobj = (void*) pbmp32_notsmil;
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXSEL;
-                                      }
-                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXSEL)
-                                      {
-                                        xtouchedItem->pobj = (void*) pbmp32_frowny;
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXEME;
-                                      }
-                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXEME)
-                                      {
-                                        xtouchedItem->pobj = (void*) pbmp32_smiley;
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
-                                      }
-                                    else
-                                      {
-                                        xtouchedItem->pobj = (void*) pbmp32_smiley;
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
-                                      }
-
-                                  break;
-                                case MENVAL_CTRL:
-                                    STXT(" SINGLE CTRL");
-                                    if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
-                                      {
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXSEL;
-                                      }
-                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXSEL)
-                                      {
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXEME;
-                                      }
-                                    else if (xtouchedItem->menuid.colmod == COLMODE_BOXEME)
-                                      {
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
-                                      }
-                                    else
-                                      {
-                                        xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
-                                      }
-                                  break;
+                                _newPage = 0;
+                                _newRow  = 0;
                               }
-                            xtouchedItem->menuid.menstat |= MENBIT_TODRAW;
+                            else
+                              {
+                                switch (xtouchedItem->menuid.ittyp)
+                                  {
+                                    case MENTYP_BITMAP:
+                                        //STXT(" SINGLE CTRL");
+                                        if (xtouchedItem->menuid.colmod == COLMODE_BOXDEF)
+                                          {
+                                            xtouchedItem->pobj = (void*) pbmp32_notsmil;
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXSEL;
+                                          }
+                                        else if (xtouchedItem->menuid.colmod == COLMODE_BOXSEL)
+                                          {
+                                            xtouchedItem->pobj = (void*) pbmp32_frowny;
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXWRN;
+                                          }
+                                        else if (xtouchedItem->menuid.colmod == COLMODE_BOXWRN)
+                                          {
+                                            xtouchedItem->pobj = (void*) pbmp32_smiley;
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
+                                          }
+                                        else
+                                          {
+                                            xtouchedItem->pobj = (void*) pbmp32_smiley;
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
+                                          }
+                                      break;
+                                    case MENTYP_CTRL:
+                                        //STXT(" SINGLE CTRL");
+                                        if (xtouchedItem == pitBMPdown)   // cursor down
+                                          {
+                                            //S4VAL(" cursor down touched _actPage _actRrow _rows[_actPage] newRow", _actPage, _actRow, _rows[_actPage], _newRow);
+                                            if ( _actRow < MENU_ROW1 )
+                                              { _newRow = MENU_ROW1; }
+                                            else if ( (_actRow - MENU_ROW1) < (_rows[_actPage] - 1))
+                                              { _newRow = _actRow + 1; }
+                                            //S4VAL(" cursor down touched _actPage _actRrow _rows[_actPage] _newRow", _actPage, _actRow, _rows[_actPage], _newRow);
+                                          }
+                                        else if (xtouchedItem == pitBMPup) // cursor up
+                                          {
+                                            //S4VAL(" cursor up touched _actPage _actRrow _rows[_actPage] _newRow", _actPage, _actRow, _rows[_actPage], _newRow);
+                                            if ((_actRow > MENU_ROW1) )
+                                              { _newRow = _actRow - 1; }
+                                            else
+                                              { _newRow = 0; }
+                                            //S4VAL(" cursor up touched _actPage _actRrow _rows[_actPage] _newRow", _actPage, _actRow, _rows[_actPage], _newRow);
+                                          }
+                                        else if (xtouchedItem == pitBMPleft)            // cursor left
+                                          {
+                                            //S4VAL(" cursor left touched _actPage _actRrow _rows[_actPage] _newPage", _actPage, _pages, _rows[_actPage], _newPage);
+                                            if ( _actPage > 0)
+                                              { _newPage = _actPage - 1; _newRow = 0;}
+                                            //S4VAL(" cursor left touched _actPage _actRrow _rows[_actPage] _newPage", _actPage, _pages, _rows[_actPage], _newPage);
+                                          }
+                                        else if (xtouchedItem == pitBMPright)    // cursor right
+                                          {
+                                            //S4VAL(" cursor right touched _actPage _actRrow _rows[_actPage] _newPage", _actPage, _pages, _rows[_actPage], _newPage);
+                                            if ( _actPage < (_pages - 1))
+                                              { _newPage = _actPage + 1;  _newRow = 0;}
+                                            //S4VAL(" cursor right touched _actPage _actRrow _rows[_actPage] _newPage", _actPage, _pages, _rows[_actPage], _newPage);
+                                          }
+                                        //S4VAL(" cursor touched _actPage _newPage _actRow _newRow ", _actPage, _newPage, _actRow, _newRow);
+                                        _new == TRUE;
+                                      break;
+                                    case MENTYP_EDTEXT:
+                                      break;
+                                    case MENTYP_EDVAL:
+                                      break;
+                                    case MENTYP_LINK:
+                                      break;
+                                    case MENTYP_OUTVAL:
+                                      // break;
+                                    case MENTYP_TEXT:
+                                        if (_actRow == _newRow) // only once
+                                          {
+                                            if (xtouchedItem->menuid.scrrow == _actRow)  // already selected
+                                              { _newRow = 0; }
+                                            else
+                                              { _newRow = xtouchedItem->menuid.scrrow; }
+                                          }
+                                        xtouchedItem->menuid.menstat |= MENBIT_TODRAW;
+                                      break;
+                                  }
+                              }
                           break;
                         case TOUCHED_LONG:
-                            switch (xtouchedItem->menuid.itemtyp)
+                            switch (xtouchedItem->menuid.ittyp)
                               {
-                                case MENVAL_TTEXT:
+                                case MENTYP_EDTEXT:
                                   break;
-                                case MENVAL_OUTVAL:
-                                case MENVAL_IOLABEL:
+                                case MENTYP_OUTVAL:
+                                case MENTYP_TEXT:
                                     switch (xtouchedItem->menuid.colmod)
                                       {
                                         case COLMODE_BOXDEF:
-                                            xtouchedItem->menuid.colmod = COLMODE_BOXEME;
+                                            xtouchedItem->menuid.colmod = COLMODE_BOXWRN;
                                           break;
                                         default:
                                             xtouchedItem->menuid.colmod = COLMODE_BOXDEF;
                                           break;
                                       }
                                   break;
-                                case MENVAL_BITMAP:
+                                case MENTYP_BITMAP:
                                       xtouchedItem->pobj = (void*) pbmp32_smiley;
                                       xtouchedItem->menuid.colmod == COLMODE_BOXDEF;
                                   break;
-                                case MENVAL_CTRL:
+                                case MENTYP_CTRL:
                                     if (xtouchedItem->menuid.colmod < COLMODE_BOXPAS)
                                       {
                                         xtouchedItem->menuid.colmod = COLMODE_BOXPAS;
@@ -925,114 +959,198 @@
                 xtouchedType = TOUCHED_NOTOUCH;
               }
           // run screen
+             if (_newPage != _actPage)     // page changed wanted
+              {
+                wrback();
+                _new = TRUE;
+                _newRow = 0;
+              }
             show(_pTitle);
             show(_pStatus);
             _ptmp = (MENUITEM_t*) _pMenu->pFirst();
+            if ( _new || (_newRow != _actRow) )    // page change
+              {
+                for (uint8_t i = 0 ; i < _pMenu->count() ; i++)
+                  {
+                    //S4HEXVAL(" .. run    ptmp idx lev stat  ", (uint32_t) _ptmp, _ptmp->index(), _ptmp->menuid.menpage, _ptmp->menuid.menstat);
+                    if (   (_ptmp->menuid.menpage == _newPage)
+                        || (_ptmp->menuid.menpage == MENPAGE_ALL) )
+                      {
+                        _ptmp->menuid.menstat |= MENBIT_TODRAW;
+                      }
+                    //if (_newRow == 0)
+                    //  {
+                        // nothing to do
+                    //  }
+                    if ( _newRow != _actRow)
+                      {
+                        if ( _ptmp->menuid.scrrow == _newRow )  // selected
+                          {
+                            _ptmp->menuid.colmod = MENMOD_COLSEL;
+                            //S2VAL("  run set SEL idx colmod ", _ptmp->index(), _ptmp->menuid.colmod);
+                          }
+                        else
+                          {
+                            _ptmp->menuid.colmod = MENMOD_COLDEF;
+                            //S2VAL("  run set DEF idx colmod ", _ptmp->index(), _ptmp->menuid.colmod);
+                          }
+                        _ptmp->menuid.menstat |= MENBIT_TODRAW;
+                      }
+                    _ptmp = (MENUITEM_t*) _ptmp->pNext();
+                  }
+              }
+            _actPage = _newPage;
+            _actRow = _newRow;
+            _ptmp = (MENUITEM_t*) _pMenu->pFirst();
             for (uint8_t i = 0 ; i < _pMenu->count() ; i++)
               {
-                //S4HEXVAL(" .. run    ptmp idx lev stat  ", (uint32_t) _ptmp, _ptmp->index(), _ptmp->menuid.menlev, _ptmp->menuid.menstat);
                 if ((_ptmp->menuid.menstat & MENBIT_TODRAW) == MENBIT_TODRAW)
                   {
-                    if (_ptmp->menuid.menlev == _actMenu)
+                    if (   (_ptmp->menuid.menpage == _actPage)
+                        || (_ptmp->menuid.menpage == MENPAGE_ALL) )
                       {
-                        _ptmp->menuid.menstat |= MENBIT_ISVIS;
-                              //S3HEXVAL(" .. run    ptmp lev stat  ", (uint32_t) _ptmp, _ptmp->menuid.menlev, _ptmp->menuid.menstat);
-                              //S3VAL   ("    run .. x    y   w     ", _ptmp->boxpos.x,  _ptmp->boxpos.y,      _ptmp->boxsize.x );
+                        //_ptmp->menuid.menstat |= MENBIT_ISVIS;
                         show(_ptmp);
-                              //S2HEXVAL("    run         lev stat  ", _ptmp->menuid.menlev, _ptmp->menuid.menstat);
                       }
                   }
                 _ptmp = (MENUITEM_t*) _ptmp->pNext();
               }
         }
-      void md_menu::show(MENUITEM_t* pitem, uint8_t maxWidth)
+      void md_menu::show(MENUITEM_t* pit, uint8_t maxWidth)
         {
           int16_t      _tx,   _ty; // txtpos    [pixel]
           uint16_t     _tw,   _th; // txtsize   [pixel]
+          uint8_t      _txtcol = 0, _boxcol = 0;
           uint8_t      _tlen, _maxlen = 0;   // txtlength [char count]
           char         _ttmp[MENU_TXTMAX + 1];
-                  //S2HEXVAL(" .. show .. pitem isInit",(uint32_t) pitem, _isInit);
-          if ( (_isInit > FALSE) && (pitem))
+                  //S2HEXVAL(" .. show .. pit isInit",(uint32_t) pit, _isInit);
+          if ( (_isInit == FALSE) || (pit == NULL)) { return; }
+
+          if      (pit == pitBMPleft)
             {
-                  //STXT(" .. show .. pitem & isInit = TRUE ");
-              /*
-                S4HEXVAL(" .. show .. pItem, menstat, menstat & bits, bits ",
-                    (uint32_t) pitem,
-                    pitem->menuid.menstat,
-                    pitem->menuid.menstat & (MENBIT_ISVIS + MENBIT_TODRAW),
-                    MENBIT_ISVIS + MENBIT_TODRAW);
-               */
-              if (   (pitem->menuid.menstat & (MENBIT_ISVIS + MENBIT_TODRAW))
-                                           == (MENBIT_ISVIS + MENBIT_TODRAW))
-                {
-                  _tw = pitem->boxtext.txtsize * TXT_CHAR1_W;
-                  _th = pitem->boxtext.txtsize * TXT_CHAR1_H;
-                  strncpy(_ttmp,pitem->boxtext.ptext, MENU_TXTMAX);
-                  switch (pitem->menuid.itemtyp)
-                    {
-                      case MENVAL_TTEXT:
-                      case MENVAL_IOLABEL:
-                      case MENVAL_OUTVAL:
-                          // calculate text x
-                            if (_tw > 0) { _maxlen = (uint8_t) ((pitem->boxsize.x - 2) / _tw); }
-                            if (_maxlen >= strlen(pitem->boxtext.ptext)) // text smaler than box width
-                              {
-                                _tlen = (uint8_t) strlen(pitem->boxtext.ptext);
-                              }
-                            else
-                              { // shrink text to maxlen
-                                _tlen = _maxlen;
-                                      //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
-                                      //STXT(" show  vor  ptxt[tlen] = 0");
-                                _ttmp[_tlen] = 0;
-                                      //STXT(" show  nach ptxt[tlen] = 0");
-                              }
-                            _tw *= _tlen;
-                                //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pitem->boxtext.ptext));
-                            switch(pitem->boxtext.align)
-                              {
-                                case TXT_CENTER:
-                                    _tx = pitem->boxpos.x + ((pitem->boxsize.x - _tw) / 2);
-                                  break;
-                                case TXT_RIGHT:
-                                    _tx = pitem->boxpos.x + (pitem->boxsize.x - _tw) - 1;
-                                  break;
-                                default: // TXT_LEFT
-                                    _tx = pitem->boxpos.x + 1;
-                                  break;
-                              }
-                          // calculate text y - only single row text
-                            _ty = pitem->boxpos.y + ((pitem->boxsize.y - _th) / 2);
-                                //S4HEXVAL("    show pitem _bx _by _bw ", (uint32_t) pitem , pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x);
-                                //S4VAL("    show _tx _ty _tw _th ", _tx, _ty, _tw, _th);
-                                //S4VAL("    show tlen len13 lentxt box.w ", _tlen, 13*pitem->boxtext.txtsize*TXT_CHAR1_W,
-                                //                                         strlen(pitem->boxtext.ptext), pitem->boxsize.x);
-                                //STXT(" show .. 2 ");
-                                //S3VAL(" show  posx posy sizex sizey ", pitem->boxpos.x,  pitem->boxpos.y,
-                                //                                       (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
-                            _pTFT->setCursor(_tx, _ty);
-                          // write box
-                            _pTFT->fillRect(pitem->boxpos.x, pitem->boxpos.y, pitem->boxsize.x, pitem->boxsize.y,
-                                            (uint16_t) (pitem->pboxcols->col(pitem->menuid.colmod)));
-                            _pTFT->setTextSize(pitem->boxtext.txtsize);
-                            _pTFT->setTextColor((uint16_t) pitem->boxtext.ptxtcol->col(pitem->menuid.colmod));
-                            _pTFT->print(_ttmp);
-                                //S2HEXVAL("   show  pitem menstat ", (uint32_t) pitem, pitem->menuid.menstat);
-                        break;
-                      case MENVAL_BITMAP:
-                      case MENVAL_CTRL:
-                          _pTFT->drawBitmap(pitem->boxpos.x + 1,  pitem->boxpos.y + 1, (uint8_t*) pitem->pobj,
-                                            pitem->menuid.bmpwh, pitem->menuid.bmpwh,
-                                            pitem->boxtext.ptxtcol->col(pitem->menuid.colmod),
-                                            pitem->pboxcols->col(pitem->menuid.colmod));
-                        break;
-                    }
-                  // reset flags
-                    pitem->menuid.menstat = pitem->menuid.menstat - MENBIT_TODRAW;
-                }
+              //S2VAL(" show pit BMPleft ", _actRow, _actPage );
+              if ( _actPage > 0)
+                { _txtcol = COLMODE_BOXDEF; }
+              else
+                { _txtcol = COLMODE_BOXPAS;}
+              pit->menuid.menstat |= MENBIT_TODRAW;
             }
-                //STXT("  .. end ");
+          else if (pit == pitBMPright)
+            {
+              //S2VAL(" show pit BMPright ", _actRow, _actPage );
+              if ( _actPage < (_pages - 1))
+                { _txtcol = COLMODE_BOXDEF; }
+              else
+                { _txtcol = COLMODE_BOXPAS;}
+              pit->menuid.menstat |= MENBIT_TODRAW;
+            }
+          else if (pit == pitBMPdown)
+            {
+              //S2VAL(" show pit BMPdown ", _actRow, _actPage );
+              if (   _rows[_actPage] > 0
+                  && ((_actRow) < (_rows[_actPage] + MENU_ROW1 - 1)))
+                { _txtcol = COLMODE_BOXDEF; }
+              else
+                { _txtcol = COLMODE_BOXPAS;}
+              pit->menuid.menstat |= MENBIT_TODRAW;
+            }
+          else if (pit == pitBMPup)
+            {
+              //S2VAL(" show pit BMPup ", _actRow, _actPage );
+              if ( _actRow >= MENU_ROW1)
+                { _txtcol = COLMODE_BOXDEF; }
+              else
+                { _txtcol = COLMODE_BOXPAS;}
+              pit->menuid.menstat |= MENBIT_TODRAW;
+            }
+          else if (pit == pitSmily)
+            {
+              pit->menuid.menstat |= MENBIT_TODRAW;
+            }
+          else
+            {
+              _boxcol = pit->pboxcols->col(pit->menuid.colmod);
+              _txtcol = pit->boxtext.ptxtcol->col(pit->menuid.colmod);
+            }
+            //if (   (   (pit->menuid.menstat & (MENBIT_ISVIS + MENBIT_TODRAW))
+            //        == (MENBIT_ISVIS + MENBIT_TODRAW))
+            //    || ((pit->menuid.ittyp   & MENTYP_CTRL)   == MENTYP_CTRL  ))
+          if (   ((pit->menuid.menstat & MENBIT_TODRAW) == MENBIT_TODRAW)
+              || ((pit->menuid.ittyp   & MENTYP_CTRL)   == MENTYP_CTRL  ))
+            {
+              _tw = pit->boxtext.txtsize * TXT_CHAR1_W;
+              _th = pit->boxtext.txtsize * TXT_CHAR1_H;
+              strncpy(_ttmp,pit->boxtext.ptext, MENU_TXTMAX);
+              switch (pit->menuid.ittyp)
+                {
+                  case MENTYP_EDTEXT: // break;
+                  case MENTYP_TEXT:   // break;
+                  case MENTYP_OUTVAL:
+                      // calculate text x
+                        if (_tw > 0) { _maxlen = (uint8_t) ((pit->boxsize.x - 2) / _tw); }
+                        if (_maxlen >= strlen(pit->boxtext.ptext)) // text smaler than box width
+                          {
+                            _tlen = (uint8_t) strlen(pit->boxtext.ptext);
+                          }
+                        else
+                          { // shrink text to maxlen
+                            _tlen = _maxlen;
+                                  //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pit->boxtext.ptext));
+                                  //STXT(" show  vor  ptxt[tlen] = 0");
+                            _ttmp[_tlen] = 0;
+                                  //STXT(" show  nach ptxt[tlen] = 0");
+                          }
+                        _tw *= _tlen;
+                            //S4VAL("    show _tlen _maxlen _tw strlen ", _tlen, _maxlen, _tw, (uint8_t) strlen(pit->boxtext.ptext));
+                        switch(pit->boxtext.align)
+                          {
+                            case TXT_CENTER:
+                                _tx = pit->boxpos.x + ((pit->boxsize.x - _tw) / 2);
+                              break;
+                            case TXT_RIGHT:
+                                _tx = pit->boxpos.x + (pit->boxsize.x - _tw) - 1;
+                              break;
+                            default: // TXT_LEFT
+                                _tx = pit->boxpos.x + 1;
+                              break;
+                          }
+                      // calculate text y - only single row text
+                        _ty = pit->boxpos.y + ((pit->boxsize.y - _th) / 2);
+                        _pTFT->setCursor(_tx, _ty);
+                      // write box
+                        //S3VAL("  show idx txtcol _actRow ", pit->index(), pit->menuid.colmod, _actRow);
+                        _pTFT->fillRect(pit->boxpos.x, pit->boxpos.y, pit->boxsize.x, pit->boxsize.y,
+                                            (uint16_t) (pit->pboxcols->col(pit->menuid.colmod)));
+                        _pTFT->setTextSize(pit->boxtext.txtsize);
+                        _pTFT->setTextColor((uint16_t) pit->boxtext.ptxtcol->col(pit->menuid.colmod));
+                        _pTFT->print(_ttmp);
+                            //S2HEXVAL("   show  pit menstat ", (uint32_t) pit, pit->menuid.menstat);
+                    break;
+                  case MENTYP_BITMAP:
+                      _tw = BOX_GRID * 2;
+                      _th = BOX_GRID * 2;
+                    // break;
+                  case MENTYP_CTRL:
+                      if (pit->menuid.ittyp == MENTYP_CTRL)
+                        {
+                          _tw = BOX_GRID;
+                          _th = BOX_GRID;
+                        }
+                      _boxcol = 0;
+                      //_pTFT->fillRect  (pit->boxpos.x, pit->boxpos.y, pit->boxsize.x, pit->boxsize.y,
+                      _pTFT->fillRect  (pit->boxpos.x, pit->boxpos.y - 1, _tw, _th,
+                                        (uint16_t) (pit->pboxcols->col(_boxcol)));
+                      _pTFT->drawBitmap(pit->boxpos.x + 2,  pit->boxpos.y + 2, (uint8_t*) pit->pobj,
+                                        pit->menuid.bmpwh, pit->menuid.bmpwh,
+                                        pit->boxtext.ptxtcol->col(_txtcol),
+                                        pit->pboxcols->col(_boxcol));
+                    break;
+                }
+              // reset flags
+                pit->menuid.menstat = pit->menuid.menstat - MENBIT_TODRAW;
+            }
         }
+                //STXT("  .. end ");
       void md_menu::wrback()
         {
           _pTFT->fillRect( _backpos.x, _backpos.y, _backsize.x, _backsize.y, COL_BACK );
@@ -1083,121 +1201,4 @@
         {
           if (_pmenuTask != NULL) { vTaskResume( _pmenuTask ); }
         }
-
-  #ifdef NOT_USED
-
-    void    actLev(uint32_t val, uint8_t level)
-      {
-      }
-
-    uint8_t actLev(uint32_t val)
-      {
-        return true;
-      }
-
-    void    oldLev(uint32_t val, uint8_t level)
-      {
-      }
-
-    uint8_t oldLev(uint32_t val)
-      {
-        return true;
-      }
-
-    void    actPage(uint32_t val, uint8_t page)
-      {
-      }
-
-    uint8_t actPage(uint32_t val)
-      {
-        return true;
-      }
-
-    void    oldPage(uint32_t val, uint8_t page)
-      {
-      }
-
-    uint8_t oldPage(uint32_t val)
-      {
-        return true;
-      }
-
-      /*
-        void calibrate()
-          {
-            uint16_t x1, y1, x2, y2;
-            //uint16_t vi1, vj1, vi2, vj2;
-            uint8_t  isok = false;
-            calParams_t calPars;
-            char buf[80];
-
-            SOUTLN("Start calibration ...");
-            pts_->getCalibrationPoints(x1, y1, x2, y2);
-            SOUT("cal points "); SOUT(x1); SOUT(" "); SOUT(y1); SOUT(" "); SOUT(x2); SOUT(" "); SOUTLN(y2);
-            do // calib until plausibility
-              {
-                calibratePoint(x1, y1, calPars.vi1, calPars.vj1);
-                SOUT("cal p(1) "); SOUT(calPars.vi1); SOUT(" "); SOUTLN(calPars.vj1);
-                sleep(1);
-                //usleep(50000);
-                calibratePoint(x2, y2, calPars.dvi, calPars.dvj);
-                SOUT("cal p(2) "); SOUT(x2); SOUT(" "); SOUT(y2); SOUT(" "); SOUT(calPars.dvi); SOUT(" "); SOUTLN(calPars.dvj);
-                pts_->setCalibration(&calPars);
-                //snprintf(buf, sizeof(buf), "%d,%d,%d,%d", (int)vi1, (int)vj1, (int)vi2, (int)vj2);
-                SOUT("buf '"); SOUTLN(buf);
-                // show result on touch
-                  pgfx_->fillBuffer(MD4_BLACK);
-                  pgfx_->setFont(ArialRoundedMTBold_14);
-                  pgfx_->setColor(MD4_YELLOW);
-                  pgfx_->drawStringInternal(0, 200, (char*) "setCalibration params:", 22, 240);
-                  pgfx_->drawStringInternal(0, 220, buf, strlen(buf), 240);
-                  pgfx_->commit();
-              }
-            while (!isok);
-            snprintf(buf, sizeof(buf), "%d/n%d/n%d/n%d/n%d/n%d/n", calPars.dx, calPars.dy,
-                                       calPars.vi1, calPars.vj1, calPars.dvi, calPars.dvj);
-            pmdt_->saveCalibration(buf, sizeof(buf));
-          }
-      */
-    // ----------------------------------------------------------------
-    /*
-        void bmp_pgm::init(mdGrafx *ptft, const char *palBmp)
-          {
-            SOUT(" bmp::init grafx "); SOUTHEX((uint32_t) ptft); SOUT(" bmp "); SOUTHEXLN((uint32_t) palBmp);
-            if (palBmp != NULL)
-              {
-                SOUT(" getBMPHeader ...");
-                _ptft = ptft;
-                _pbmp = palBmp;
-                _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
-                SOUTLN(" ready");
-              }
-          }
-      */
-
-    void bmp_pgm::draw(const char *palBmp ,int16_t x, int16_t y)  // left upper position
-      {
-        if ( (x >= 0) && (y >= 0) & (palBmp != NULL))
-          {
-            if ((_pbmp != NULL) && (_pbmp != palBmp))
-              { // clear old logo
-                _ptft->setColor(MD16_BLACK);
-                _ptft->fillRect(_posx, _posy, _head.width, _head.height);
-                _ptft->commit();
-              }
-            _posx = x;
-            _posy = y;
-            _pbmp = palBmp;
-            _ptft->getPalBitmapHeadFromPgm(&_head, _pbmp);
-            _ptft->drawPalettedBitmapFromPgm(_posx, _posy, _pbmp);
-              /*
-                SOUT("draw icon addr "); SOUTHEX((uint32_t) _pbmp);
-                SOUT(" size "); SOUT(_head.width * _head.height + sizeof(BMPHeader_t));
-                SOUT(" bmpcolor "); SOUT(_head.bitDepth);
-                SOUT(" width "); SOUT(_head.width); SOUT(" height "); SOUTLN(_head.height);
-                */
-          }
-      }
-
-    #endif
 #endif // NOTREADY

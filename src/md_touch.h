@@ -227,14 +227,14 @@
   // --- menu control   // menu timing
     // basics
       #define MENU_TASK_SLEEP_US  10000ul
-      #define MENU4BIT_MASK      0x0000000Fu
+      #define MENU4BIT_MASK       0x0000000Fu
     // menu format
       #define COL_BACK       COL16_BLACK
       #define BOX_GRID       20
       #define BOX_X_MAX      12
       #define BOX_Y_MAX      16
       #define VAL_L_POS      1
-      #define VAL_L_SIZE     7
+      #define VAL_L_SIZE     6
       #define VAL_V_POS      VAL_L_POS + VAL_L_SIZE
       #define VAL_V_SIZE     4
       #define MENU_MAXLINES  BOX_Y_MAX - 2
@@ -255,7 +255,7 @@
         {
           COLMODE_BOXDEF = 0,
           COLMODE_BOXSEL,
-          COLMODE_BOXEME,
+          COLMODE_BOXWRN,
           COLMODE_BOXPAS,
           COLMODE_BOXMAX,
           COLMODE_BOXRDY
@@ -265,7 +265,7 @@
         {
           md_colors coldef;
           md_colors colsel;
-          md_colors coleme;
+          md_colors colwrn;
           md_colors colpas;
 
           md_colors col(uint8_t mode)
@@ -274,7 +274,7 @@
                 {
                   case 0: return coldef;
                   case 1: return colsel;
-                  case 2: return coleme;
+                  case 2: return colwrn;
                   default: return colpas;
                 }
               return coldef;
@@ -298,22 +298,21 @@
                                                 MD_RED_MEDIUM,
                                                 MD_BLACK };
       const static COLORS_t  defTxtCols     = { MD_GREEN_MEDIUM,
-                                                MD_PURPLE_HIGH,
+                                                MD_CYAN_MEDIUM,
                                                 MD_GREENYELLOW,
                                                 MD_OLIVE };
       const static COLORS_t  statitTxtCols  = { MD_GREEN_LOW,
-                                                MD_PURPLE_MEDIUM,
+                                                MD_CYAN_MEDIUM,
                                                 MD_GREENYELLOW,
                                                 MD_OLIVE };
       const static COLORS_t  curTxtCols     = { MD_CYAN_MEDIUM,
                                                 MD_YELLOW_HIGH,
                                                 MD_GREENYELLOW,
                                                 MD_OLIVE };
-      const static COLORS_t  bmpTxtCols     = { MD_GREEN_HIGH,
-                                                MD_PURPLE_HIGH,
+      const static COLORS_t  bmpTxtCols     = { MD_GREEN_MEDIUM,
+                                                MD_CYAN_MEDIUM,
                                                 MD_GREENYELLOW,
-                                                MD_GREY_LOW
-                                              };
+                                                MD_GREY_LOW};
       const static COLORS_t* pdefBoxCols    = &defBoxCols;
       const static COLORS_t* pdefTxtCols    = &defTxtCols;
       const static COLORS_t* pstatitBoxCols = &statitBoxCols;
@@ -333,6 +332,9 @@
     // --- menu text
       #define ITEM_TXT_MAXLEN_240 20
       #define ITEM_TXT_MAXLEN_320 26
+    // --- menu size
+      #define MENU_ROW1   3
+      #define MENU_ROWMAX 12
       typedef struct MENUTEXT_t
         {
           char*     ptext   = NULL;
@@ -364,7 +366,7 @@
        *   26-22 5 bits - 1. column [unit grid]
        *   21-19 3 bits - menu lev
        *   18-14 5 bits - width [unit grid]
-       *   13-11 3 bits - item type
+       *   13-11 3 bits - it type
        *        =7: reserved
        *        =6: reserved
        *        =5: reserved
@@ -391,31 +393,31 @@
           // screen position    - static => no clr
             MENUSCR_MASK_ROW     = 0xF8000000u, // 5 bits 31-27 row [grid]
             MENUSCR_MASK_COL     = 0x07C00000u, // 5 bits 26-22 column [grid]
-            MENUSCR_MASK_LEV     = 0x00380000u, // 3 bits 21-19 screen line all levels
-                MENLEV_ALL       = 7,
+            MENUSCR_MASK_PAGE    = 0x00380000u, // 3 bits 21-19 screen line all levels
+                MENPAGE_ALL      = 255,
             MENUSCR_MASK_COLS    = 0x0007C000u, // 5 bits 18-14 width [grid]
             MENUSCR_SHIFT_ROW    = 27,
             MENUSCR_SHIFT_COL    = 22,
-            MENUSCR_SHIFT_LEV    = 19,
+            MENUSCR_SHIFT_PAGE   = 19,
             MENUSCR_SHIFT_COLS   = 14,
-          // item type
+          // it type
             MENUTYP_MASK_ITEM    = 0x00003800u, // bits  13-11
             MENUSCR_SHIFT_TYP    = 11,
-                MENVAL_RES7      = 7, // reserved
-                MENVAL_CTRL      = 6, // menu control button
-                MENVAL_BITMAP    = 5, // bitmap
-                MENVAL_LINK      = 4, // link
-                MENVAL_INPLINK   = 3, // input & link (type VAL)
-                MENVAL_OUTVAL    = 2, // out value (type VAL)
-                MENVAL_IOLABEL   = 1, // I/O label
-                MENVAL_TTEXT     = 0, // text
+                MENTYP_RES7      = 7, // reserved
+                MENTYP_CTRL      = 6, // menu control button
+                MENTYP_BITMAP    = 5, // bitmap
+                MENTYP_LINK      = 4, // link
+                MENTYP_EDVAL     = 3, // input & link (type VAL)
+                MENTYP_OUTVAL    = 2, // out value (type VAL)
+                MENTYP_TEXT      = 1, // I/O label
+                MENTYP_EDTEXT    = 0, // text
           // value type
             MENUTYP_MASK_VAL     = 0x0000060u, // bits  10-9
             MENUSCR_SHIFT_VAL    = 9,
-                MENVAL_UNDEF     = 3, // not used
+                MENVAL_BOOL      = 3, // not used
                 MENVAL_INT       = 2, // integer
                 MENVAL_FLOAT     = 1, // float
-                MENVAL_VTEXT     = 0, // text
+                MENVAL_TEXT      = 0, // text
           // reserved
             MENUMOD_MASK_RES     = 0x00000100u, // reserved bit 8
             MENUSCR_SHIFT_RES    = 8,
@@ -427,54 +429,54 @@
                 MENBIT_ISSEL     = 8, // bit 5  selected - provided for decoding
                 MENBIT_HASLINK   = 4, // bit 4  active   - provided for decoding
                 MENBIT_TOSEL     = 2, // bit 3  selectable provided for decoding
-                MENBIT_ISVIS     = 1, // bit 2  visible
+                MENBIT_RES1      = 1, // bit 2  visible
                 MENBIT_NO        = 0,
           // colmode
             MENUMOD_MASK_COLOR   = 0x00000003u, // bits  1-0 screen line in main menu level 3
             MENUMOD_SHIFT_COLOR  = 0,
-                MENVAL_MODEME    = 3,
-                MENVAL_MODWRN    = 2,
-                MENVAL_MODSEL    = 1,
-                MENVAL_MODDEF    = 0
+                MENMOD_COLPAS    = 3,
+                MENMOD_COLWRN    = 2,
+                MENMOD_COLSEL    = 1,
+                MENMOD_COLDEF    = 0
         } CODE_MASK_t;
                                                 // screen define masks
       typedef struct ITEMID_t
         {
           uint8_t scrrow  = 1; // 5 bits - screen row    grid [0 - SCRROW_MAX]
           uint8_t scrcol  = 1; // 5 bits - screen column grid [0 - SCRCOL_MAX]
-          uint8_t menlev  = 0; // 3 bits - menu level
-          uint8_t itemw   = BOX_X_MAX; // 5 bits - item width    grid [0 - SCRCOL_MAX]
-          uint8_t itemh   = 1; // 5 bits - item width    grid [0 - SCRCOL_MAX]
+          uint8_t menpage = 0; // 3 bits - menu level
+          uint8_t itw     = BOX_X_MAX; // 5 bits - it width    grid [0 - SCRCOL_MAX]
+          uint8_t ith     = 1; // 5 bits - it width    grid [0 - SCRCOL_MAX]
           uint8_t bmpwh   = 16;
-          uint8_t itemtyp = 0; // 3 bits - item type
+          uint8_t ittyp   = 0; // 3 bits - it type
           uint8_t valtyp  = 0; // 2 bits - value type
           uint8_t menstat = MENBIT_TODRAW; // 8 bits - menu act status
           uint8_t colmod  = 0; // 2 bits - color work mode [0..3]
 
-          uint32_t itemID()
+          uint32_t itID()
             {
               return (  (scrcol<<MENUSCR_SHIFT_COL)   + (scrrow<<MENUSCR_SHIFT_ROW)
-                      + (itemw<<MENUSCR_SHIFT_COLS)   + (menlev<<MENUSCR_SHIFT_LEV)
-                      + (itemtyp<<MENUSCR_SHIFT_TYP)  + (valtyp<<MENUSCR_SHIFT_VAL)
+                      + (itw<<MENUSCR_SHIFT_COLS)   + (menpage<<MENUSCR_SHIFT_PAGE)
+                      + (ittyp<<MENUSCR_SHIFT_TYP)  + (valtyp<<MENUSCR_SHIFT_VAL)
                       + (menstat<<MENUMOD_SHIFT_MENU) + (colmod<<MENUMOD_SHIFT_COLOR)
                      );
             }
           void operator=(uint32_t id)
             {
-              S2HEXVAL(" = colmod itemid ", colmod, itemID());
+              S2HEXVAL(" = colmod itid ", colmod, itID());
               colmod  = (uint8_t) (id & MENUMOD_MASK_COLOR) >> MENUMOD_SHIFT_COLOR;
-              S2HEXVAL(" = colmod itemid ", colmod, itemID());
+              S2HEXVAL(" = colmod itid ", colmod, itID());
               menstat = (uint8_t) (id & MENUMOD_MASK_STAT)  >> MENUMOD_SHIFT_MENU;
-              menlev  = (uint8_t) (id & MENUSCR_MASK_LEV)   >> MENUSCR_SHIFT_LEV;
+              menpage = (uint8_t) (id & MENUSCR_MASK_PAGE)  >> MENUSCR_SHIFT_PAGE;
               valtyp  = (uint8_t) (id & MENUTYP_MASK_VAL)   >> MENUSCR_SHIFT_VAL;
-              itemtyp = (uint8_t) (id & MENUTYP_MASK_ITEM)  >> MENUSCR_SHIFT_TYP;
-              itemw   = (uint8_t) (id & MENUSCR_MASK_COLS)  >> MENUSCR_SHIFT_COLS;
+              ittyp   = (uint8_t) (id & MENUTYP_MASK_ITEM)  >> MENUSCR_SHIFT_TYP;
+              itw     = (uint8_t) (id & MENUSCR_MASK_COLS)  >> MENUSCR_SHIFT_COLS;
               scrcol  = (uint8_t) (id & MENUSCR_MASK_COL)   >> MENUSCR_SHIFT_COL;
               scrrow  = (uint8_t) (id & MENUSCR_MASK_ROW)   >> MENUSCR_SHIFT_ROW;
             }
         } ITEMID_t;
   // --- class md_menu
-    // menu item
+    // menu it
       class MENUITEM_t : public md_cell //: public tBox, public tBoxColors, public tText, public cItemID //, public md_cell
         {
           public:
@@ -484,7 +486,7 @@
             MENUTEXT_t boxtext;
             ITEMID_t   menuid;
             uint8_t    maxtxtlen;
-            void*      pobj = NULL; // pointer to bitmap, function, menu item
+            void*      pobj = NULL; // pointer to bitmap, function, menu it
 
             char*   printbox(char *p)
               {
@@ -524,7 +526,12 @@
             md_list*     _pMenu      = NULL;
             POINT_t      _backpos;
             POINT_t      _backsize;
-            uint8_t      _actMenu    = 0; // def main menu
+            uint8_t      _pages      = 0;
+            uint8_t      _rows[8]    = {0,0,0,0,0,0,0,0};
+            uint8_t      _actPage    = 0; // def main menu
+            uint8_t      _newPage    = 0; // def main menu
+            uint8_t      _actRow     = 0; // def main menu
+            uint8_t      _newRow     = 0; // def main menu
             uint8_t      _isInit     = FALSE;
           public:
             md_menu();
@@ -539,7 +546,7 @@
             void wrTitle  (String msg, uint8_t colormode = MD_DEF)
               { wrTitle(msg.c_str(), colormode); }
             void run();
-            void show(MENUITEM_t* pitem = NULL, uint8_t maxWidth = FALSE);
+            void show(MENUITEM_t* pit = NULL, uint8_t maxWidth = FALSE);
             void wrback();
             MENUITEM_t* getItem(POINT_t* ptouchP);
 
@@ -612,7 +619,13 @@
       void IRAM_ATTR touchTask (void *pvParameters);
       void IRAM_ATTR menuTask  (void * pvParameters);
 
-  extern MENUITEM_t itemTitel;
-  extern MENUITEM_t itemStatus;
+  // --- extern references
+    extern MENUITEM_t* pitTitle;
+    extern MENUITEM_t* pitStatus;
+    extern MENUITEM_t* pitBMPleft;
+    extern MENUITEM_t* pitBMPup;
+    extern MENUITEM_t* pitBMPdown;
+    extern MENUITEM_t* pitBMPright;
+    extern MENUITEM_t* pitSmily;
 
 #endif // _MD_TOUCH_H_
