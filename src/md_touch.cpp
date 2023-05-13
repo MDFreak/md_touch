@@ -28,7 +28,7 @@
            uint16_t c;
            uint16_t d;
     static msTimer             _TStat     = msTimer(5);
-  // specials
+  // --- specials
     // touch task internal variables
       static uint32_t     _tlastT    = 0;
       static uint32_t     _tactT     = 0;
@@ -70,7 +70,7 @@
         //const uint32_t    _tWait_Touch_us = 10000; // task time tick (minimum = 1000 ~ 1 msec)
         //const uint32_t    _tWait_Menu_us  = 10000; // task time tick (minimum = 1000 ~ 1 msec)
     //static TaskHandle_t menuTask_  = NULL;
-  // task touchTask
+  // --- task touchTask
     void IRAM_ATTR touchTask(void * pvParameters)
       {
         //unsigned long lastWD, actWD, diff;
@@ -196,7 +196,7 @@
                             0              );      /* pin task to core 0 */
         SOUTLN("touchTask started on core 0");
       }
-  // task menuTask
+  // --- task menuTask
     void IRAM_ATTR menuTask(void * pvParameters)
       {
         //unsigned long lastWD, actWD, diff;
@@ -619,7 +619,7 @@
           { if (_pmdtouch != NULL) { vTaskSuspend( _pmdtouch ); } }
         void md_touch::resume()
           { if (_pmdtouch != NULL) { vTaskResume( _pmdtouch ); } }
-  // md_menu
+  // --- md_menu
       md_menu::md_menu()
         {
           _pmdmenu = this;
