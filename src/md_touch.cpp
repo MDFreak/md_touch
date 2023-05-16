@@ -388,7 +388,7 @@
                         #if (DEBUG_MODE >= CFG_DEBUG_STARTUP)
                             SOUTLN("             .. is to be calibrated");
                           #endif
-                        doCalibration();
+                        //doCalibration();
                       break;
                   }
                 if (doTask)
